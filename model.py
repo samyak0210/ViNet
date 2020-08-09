@@ -16,10 +16,14 @@ class BackBonePNAS(nn.Module):
 
 		self.pnas = NetworkImageNet(216, 1001, 12, False, PNASNet)
 		if load_weight:
-			self.pnas.load_state_dict(torch.load(self.path))
+			weights = torch.load(self.path)
+			del weights["classifier.weight"]
+			del weights["classifier.bias"]
+			self.pnas.load_state_dict(weights)
 		
-		for param in self.pnas.parameters():
-			param.requires_grad = finetune
+		for (name, param) in self.pnas.named_parameters():
+			if "classifier" not in name:
+				param.requires_grad = finetune
 
 		self.padding = nn.ConstantPad2d((0,1,0,1),0)
 		self.drop_path_prob = 0
@@ -29,29 +33,29 @@ class BackBonePNAS(nn.Module):
 
 		s0 = self.pnas.conv0(images)
 		s0 = self.pnas.conv0_bn(s0)
-		out1 = self.padding(s0)
+		# out1 = self.padding(s0)
 
 		s1 = self.pnas.stem1(s0, s0, self.drop_path_prob)
-		out2 = s1
+		# out2 = s1
 		s0, s1 = s1, self.pnas.stem2(s0, s1, 0)
 
 		for i, cell in enumerate(self.pnas.cells):
 			s0, s1 = s1, cell(s0, s1, 0)
-			if i==3:
-				out3 = s1
-			if i==7:
-				out4 = s1
+			# if i==3:
+			# 	out3 = s1
+			# if i==7:
+			# 	out4 = s1
 			if i==11:
 				out5 = s1
 
-		return [out1, out2, out3, out4], out5
+		return out5
 
 class BackBoneENet(nn.Module):
 	def __init__(self, num_channels=3, finetune=True, load_weight=1):
 		super(BackBoneENet, self).__init__()
 
 		self.model = EfficientNet.from_pretrained('efficientnet-b0')
-		for param in self.model.parameters():
+		for (name, param) in self.model.named_parameters():
 			param.requires_grad = finetune
 
 		self.conv_block1 = nn.Sequential(
@@ -111,9 +115,9 @@ class PositionalEncoding(nn.Module):
 		# return self.dropout(x)
 		return x
 
-class Transformer(nn.Module):
+class TransformerEnc(nn.Module):
 	def __init__(self, feat_size, hidden_size=256, nhead=8, num_encoder_layers=6, max_len=32):
-		super(Transformer, self).__init__()
+		super(TransformerEnc, self).__init__()
 		self.pos_encoder = PositionalEncoding(feat_size, max_len=max_len)
 		encoder_layers = nn.TransformerEncoderLayer(feat_size, nhead, hidden_size)
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
@@ -124,6 +128,22 @@ class Transformer(nn.Module):
 		x = self.pos_encoder(embeddings)
 		x = self.transformer_encoder(x)
 		return x
+
+class Transformer(nn.Module):
+	def __init__(self, feat_size, nhead=8, num_encoder_layers=6, num_decoder_layers=6, max_len=32):
+		super(Transformer, self).__init__()
+		print("Enc + Dec")
+		self.pos_encoder = PositionalEncoding(feat_size, max_len=max_len)
+		self.transformer = nn.Transformer(feat_size, nhead, num_encoder_layers, num_decoder_layers)
+		self.query_pos = nn.Embedding(1, feat_size)
+
+	def forward(self, embeddings):
+		''' embeddings: CxBxCh*H*W '''
+		batch_size = embeddings.size(1)
+		x = self.pos_encoder(embeddings)
+		x = self.transformer(x, self.query_pos.weight.unsqueeze(1).repeat(1, batch_size, 1))
+		return x
+
 
 class Decoder(nn.Module):
 	def __init__(self, channels_list):
@@ -204,20 +224,56 @@ class DecoderWithoutSkip(nn.Module):
 		)
 
 class VideoSaliencyModel(nn.Module):
-	def __init__(self, transformer_in_channel=1280, transformer_out_channel=64, finetune=True, load_weight=1, nhead=8, num_encoder_layers=6, clip_size=32):
+	def __init__(self, 
+			backbone='enet', 
+			transformer_in_channel=64,
+			finetune=True, 
+			load_weight=1, 
+			nhead=8, 
+			num_encoder_layers=6,
+			num_decoder_layers=6,
+			clip_size=32, 
+			use_enc_dec=False,
+			deconv_channel=256
+		):
 		super(VideoSaliencyModel, self).__init__()
-		self.backbone = BackBoneENet(finetune=finetune, load_weight=load_weight)
-		self.transformer_out_channel = transformer_out_channel
-		self.conv = nn.Conv2d(in_channels=transformer_in_channel, out_channels=transformer_out_channel, kernel_size=(1,1), bias=True)
-		self.transformer = Transformer(transformer_out_channel * 8 * 8, hidden_size=transformer_out_channel * 8 * 8, nhead=nhead, num_encoder_layers=num_encoder_layers, max_len=clip_size)
+		if backbone == "enet":
+			backbone_out_channel=1280
+			self.backbone = BackBoneENet(finetune=finetune, load_weight=load_weight)
+		
+		elif backbone=="pnas":
+			backbone_out_channel=4320 
+			self.backbone = BackBonePNAS(finetune=finetune, load_weight=load_weight)	
+
+		self.transformer_in_channel = transformer_in_channel
+		self.conv = nn.Conv2d(in_channels=backbone_out_channel, out_channels=transformer_in_channel, kernel_size=(1,1), bias=True)
+		self.use_enc_dec = use_enc_dec
+		
 		channels_list = [
-			(transformer_out_channel*clip_size, 256),
-			(256, 128),
-			(128, 64),
-			(64, 32),
-			(32, 16),
-			(16, 16)
+			[transformer_in_channel, deconv_channel],
+			[deconv_channel, deconv_channel//2],
+			[deconv_channel//2, deconv_channel//4],
+			[deconv_channel//4, deconv_channel//8],
+			[deconv_channel//8, deconv_channel//16],
+			[deconv_channel//16, 1]
 		]
+		if self.use_enc_dec:
+			self.transformer = Transformer(
+				transformer_in_channel * 8 * 8, 
+				nhead=nhead, 
+				num_encoder_layers=num_encoder_layers, 
+				num_decoder_layers=num_decoder_layers,
+				max_len=clip_size
+			)
+		else:
+			channels_list[0][0] *= clip_size
+			self.transformer = TransformerEnc(
+				transformer_in_channel * 8 * 8, 
+				transformer_in_channel * 8 * 8, 
+				nhead=nhead, 
+				num_encoder_layers=num_encoder_layers, 
+				max_len=clip_size
+			)
 		self.decoder = DecoderWithoutSkip(channels_list)
 
 	def forward(self, clips):
@@ -237,10 +293,15 @@ class VideoSaliencyModel(nn.Module):
 
 		features = features.flatten(2)
 		features = self.transformer(features)
-		assert features.size(0) == num_clips and features.size(1) == batch_size 
-		
-		features = features.permute((1,0,2))
-		features = features.reshape(batch_size, num_clips*self.transformer_out_channel, 8, 8)
+		if not self.use_enc_dec:
+			assert features.size(0) == num_clips and features.size(1) == batch_size 
+			features = features.permute((1,0,2))
+			features = features.reshape(batch_size, num_clips*self.transformer_in_channel, 8, 8)
+		else:
+			assert features.size(0) == 1 and features.size(1) == batch_size 
+			# print(features.size())
+			features = features.squeeze(0)
+			features = features.reshape(batch_size, self.transformer_in_channel, 8, 8)
 		# for i in range(num_clips):
 		# 	if i==0:
 		# 		sal_map = self.decoder(features[i]).unsqueeze(0)
@@ -250,7 +311,7 @@ class VideoSaliencyModel(nn.Module):
 		# sal_map = sal_map.permute((1,0,2,3))
 		return sal_map
 
-model = torch.nn.DataParallel(VideoSaliencyModel(nhead=4, num_encoder_layers=3, finetune=False)).cuda()
-a = torch.zeros((16,32,3,256,256)).cuda()
-b=model(a)
-print(b.size())
+# model = torch.nn.DataParallel(VideoSaliencyModel(nhead=4, num_encoder_layers=3, finetune=False)).cuda()
+# a = torch.zeros((16,32,3,256,256)).cuda()
+# b=model(a)
+# print(b.size())
