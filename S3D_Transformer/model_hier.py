@@ -80,50 +80,39 @@ class DecoderConvT(nn.Module):
 
         self.convtsp1 = nn.Sequential(
             nn.Conv3d(1024, 1024, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm3d(1024, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(1024, 832, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(832, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp2 = nn.Sequential(
             nn.Conv3d(832, 832, kernel_size=(3,1,1), stride=(3,1,1), bias=False),
-            nn.BatchNorm3d(832, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(832, 480, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(480, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp3 = nn.Sequential(
             nn.Conv3d(480, 480, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
-            nn.BatchNorm3d(480, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(480, 192, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(192, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp4 = nn.Sequential(
             nn.Conv3d(192, 192, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
-            nn.BatchNorm3d(192, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(192, 64, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(64, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.Conv3d(64, 64, kernel_size=(2,1,1), stride=(2,1,1), bias=False),
-            nn.BatchNorm3d(64, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(64, 4, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm3d(4, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.Conv3d(4, 4, kernel_size=(2,1,1), stride=(2,1,1), bias=False),
-            nn.BatchNorm3d(4, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(4, 4, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
@@ -213,9 +202,8 @@ class BackBoneS3D(nn.Module):
 
         return [y0, y1, y2, y3]
 
-
 class TASED_v2_hier(nn.Module):
-    def __init__(self, transformer_in_channel=32, use_transformer=False, num_encoder_layers=3, nhead=4):
+    def __init__(self, transformer_in_channel=32, use_transformer=True, num_encoder_layers=3, nhead=4):
         super(TASED_v2_hier, self).__init__()
         self.use_transformer = use_transformer
         if self.use_transformer:
@@ -250,50 +238,39 @@ class TASED_v2_hier(nn.Module):
 
         self.convtsp1 = nn.Sequential(
             nn.Conv3d(1024, 1024, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm3d(1024, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(1024, 832, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(832, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp2 = nn.Sequential(
             nn.Conv3d(832, 832, kernel_size=(3,1,1), stride=(3,1,1), bias=False),
-            nn.BatchNorm3d(832, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(832, 480, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(480, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp3 = nn.Sequential(
             nn.Conv3d(480, 480, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
-            nn.BatchNorm3d(480, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(480, 192, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(192, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
         )
         self.convtsp4 = nn.Sequential(
             nn.Conv3d(192, 192, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
-            nn.BatchNorm3d(192, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(192, 64, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
-            nn.BatchNorm3d(64, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.Conv3d(64, 64, kernel_size=(2,1,1), stride=(2,1,1), bias=False),
-            nn.BatchNorm3d(64, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(64, 4, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm3d(4, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.Conv3d(4, 4, kernel_size=(2,1,1), stride=(2,1,1), bias=False),
-            nn.BatchNorm3d(4, eps=1e-3, momentum=0.001, affine=True),
             nn.ReLU(),
 
             nn.ConvTranspose3d(4, 4, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),

@@ -14,21 +14,21 @@ if ~exist(CACHE, 'dir')
     mkdir(CACHE);
 end
 %%
-options.Result_path = '/ssd_scratch/cvit/navyasri/Results/DHF1K';
-options.DS_path = '/ssd_scratch/cvit/navyasri/';
+options.Result_path = '/ssd_scratch/cvit/samyak/Results/';
+options.DS_path = '/ssd_scratch/cvit/samyak/';
 
 Datasets{1} = 'UCF sports';
 Datasets{2} = 'Hollywood-2';
 Datasets{3} = 'DHF1K';
 
 
-Metrics{1} = 'NSS'; 
+Metrics{1} = 'CC'; 
 Metrics{2} = 'similarity'; 
-Metrics{3} = 'CC';
+Metrics{3} = 'NSS';
 Metrics{4} = 'AUC_Judd';
 Metrics{5} = 'AUC_shuffled';
 
-Results{1} = 'temp';
+Results{1} = 'adam_transformer_no_batchnorm';
 
 for i = 3:3 %length(Datasets)
     Datasets{i};
@@ -45,7 +45,7 @@ for i = 3:3 %length(Datasets)
         end
         options.IMG_DIR = [options.DS_GT_DIR, '*/images/'];
         % // disp(options.IMG_DIR);
-        for j = 3:3% 1:length(Metrics)
+        for j = 4:4 %length(Metrics)
             if ~exist([CACHE Datasets{i} '_' Results{k} '_' Metrics{j} '.mat'], 'file')                 
                 [result, allMetric, ~] = evaluationFunc(options, Metrics{j});
                 % save([CACHE Datasets{i} '_' Results{k} '_' Metrics{j} '.mat'], 'result');

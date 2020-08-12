@@ -14,7 +14,7 @@ from utils import *
 import time
 from tqdm import tqdm
 from torchvision import transforms, utils
-from os.path import join
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -32,26 +32,26 @@ def validate(args):
         num_encoder_layers=args.num_encoder_layers, 
         nhead=args.nhead
     )
-    model.load_state_dict(torch.load(file_weight))
+    # model.load_state_dict(torch.load(file_weight))
     # load the weight file and copy the parameters
-    # if os.path.isfile(file_weight):
-    #     print ('loading weight file')
-    #     weight_dict = torch.load(file_weight, map_location=device)
-    #     model_dict = model.state_dict()
-    #     for name, param in weight_dict.items():
-    #         if 'module' in name:
-    #             name = '.'.join(name.split('.')[1:])
-    #         if name in model_dict:
-    #             if param.size() == model_dict[name].size():
-    #                 model_dict[name].copy_(param)
-    #             else:
-    #                 print (' size? ' + name, param.size(), model_dict[name].size())
-    #         else:
-    #             print (' name? ' + name)
+    if os.path.isfile(file_weight):
+        print ('loading weight file')
+        weight_dict = torch.load(file_weight, map_location=device)
+        model_dict = model.state_dict()
+        for name, param in weight_dict.items():
+            if 'module' in name:
+                name = '.'.join(name.split('.')[1:])
+            if name in model_dict:
+                if param.size() == model_dict[name].size():
+                    model_dict[name].copy_(param)
+                else:
+                    print (' size? ' + name, param.size(), model_dict[name].size())
+            else:
+                print (' name? ' + name)
 
-    #     print (' loaded')
-    # else:
-    #     print ('weight file?')
+        print (' loaded')
+    else:
+        print ('weight file?')
 
     model = model.to(device)
     torch.backends.cudnn.benchmark = False
@@ -60,17 +60,9 @@ def validate(args):
     # iterate over the path_indata directory
     list_indata = [d for d in os.listdir(path_indata) if os.path.isdir(os.path.join(path_indata, d))]
     list_indata.sort()
-
-    if args.start_idx!=-1:
-        _len = 0.25*len(list_indata)
-        list_indata = list_indata[int((args.start_idx-1)*_len): int(args.start_idx*_len)]
-
     video_kldiv_loss = []
     video_cc_loss = []
     video_nss_loss = []
-    
-    os.system('mkdir -p '+args.save_path)
-
     for dname in list_indata:
         print ('processing ' + dname, flush=True)
         list_frames = [f for f in os.listdir(os.path.join(path_indata, dname, 'images')) if os.path.isfile(os.path.join(path_indata, dname, 'images', f))]
@@ -92,7 +84,7 @@ def validate(args):
                     clip = torch.FloatTensor(torch.stack(snippet, dim=0)).unsqueeze(0)
                     clip = clip.permute((0,2,1,3,4))
 
-                    kldiv_loss, cc_loss, nss_loss = process(model, clip, path_indata, dname, list_frames[i], args)
+                    kldiv_loss, cc_loss, nss_loss = process(model, clip, path_indata, dname, list_frames[i])
                     total_kldiv_loss += kldiv_loss
                     total_nss_loss += nss_loss
                     total_cc_loss += cc_loss
@@ -100,7 +92,7 @@ def validate(args):
 
                     # process first (len_temporal-1) frames
                     if i < 2*len_temporal-2:
-                        kldiv_loss, cc_loss, nss_loss = process(model, torch.flip(clip, [2]), path_indata, dname, list_frames[i-len_temporal+1], args)
+                        kldiv_loss, cc_loss, nss_loss = process(model, torch.flip(clip, [2]), path_indata, dname, list_frames[i-len_temporal+1])
                         total_kldiv_loss += kldiv_loss
                         total_nss_loss += nss_loss
                         total_cc_loss += cc_loss
@@ -121,13 +113,6 @@ def validate(args):
     print("kldiv ", sum(video_kldiv_loss)/len(video_kldiv_loss))
     print("cc ", sum(video_cc_loss)/len(video_cc_loss))
     print("nss ", sum(video_nss_loss)/len(video_nss_loss))
-    print()
-
-    if args.start_idx!=-1:
-        print("Non Average")
-        print("kldiv ", sum(video_kldiv_loss))
-        print("cc ", sum(video_cc_loss))
-        print("nss ", sum(video_nss_loss))
 
 def torch_transform(path):
     img_transform = transforms.Compose([
@@ -147,7 +132,7 @@ def blur(img):
     bl = cv2.GaussianBlur(img,(k_size,k_size),0)
     return torch.FloatTensor(bl)
 
-def process(model, clip, path_inpdata, dname, frame_no, args=None):
+def process(model, clip, path_inpdata, dname, frame_no):
     ''' process one clip and save the predicted saliency map '''
     with torch.no_grad():
         smap = model(clip.to(device)).cpu().data[0]
@@ -165,14 +150,10 @@ def process(model, clip, path_inpdata, dname, frame_no, args=None):
     smap = cv2.resize(smap, (gt.shape[1], gt.shape[0]))
     smap = blur(smap)
 
-    if args.save:
-        os.makedirs(join(args.save_path, dname), exist_ok=True)
-        img_save(smap, join(args.save_path, dname, frame_no), normalize=True)
 
     fix = torch.FloatTensor(fix).unsqueeze(0).cuda()
     gt = torch.FloatTensor(gt).unsqueeze(0).cuda()
     smap = torch.FloatTensor(smap).unsqueeze(0).cuda()
-
 
     assert smap.size() == gt.size() and smap.size() == fix.size()
 
@@ -184,14 +165,11 @@ def process(model, clip, path_inpdata, dname, frame_no, args=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_weight',default="./saved_models/adam_transformer_no_batchnorm.pt", type=str)
+    parser.add_argument('--file_weight',default="./saved_models/adam_transformer_fixed_sample_more_epochs.pt", type=str)
     parser.add_argument('--use_transformer',default=True, type=bool)
     parser.add_argument('--nhead',default=4, type=int)
     parser.add_argument('--num_encoder_layers',default=3, type=int)
     parser.add_argument('--transformer_in_channel',default=32, type=int)
-    parser.add_argument('--save',default=False, type=bool)
-    parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/adam_transformer_no_batchnorm', type=str)
-    parser.add_argument('--start_idx',default=-1, type=int)
 
     args = parser.parse_args()
     print(args)

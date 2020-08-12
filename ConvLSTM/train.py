@@ -1,9 +1,11 @@
 ''' Kl - CC '''
-''' Output 2 / 32 frames with S3D '''
 ''' ConvT -> Conv + Up '''
+''' Look for better encoders than S3D '''
+''' Output 32 frames with S3D '''
 ''' Finetuning using lr sched '''
-''' Backbone with GRU/LSTM at highest level of heirarchy '''
 ''' Using Decoder to generate 32 gaussians '''
+''' Using 2D Decoder for Sliding Window '''
+''' Backbone with GRU at highest level of heirarchy '''
 
 import argparse
 import glob, os
@@ -22,7 +24,7 @@ import torch.nn.functional as F
 from dataloader import DHF1KDataset
 from loss import *
 import cv2
-from model_hier import TASED_v2_hier as TASED_v2
+from model_lstm import CombinedModel
 from utils import *
 
 parser = argparse.ArgumentParser()
@@ -52,24 +54,24 @@ parser.add_argument('--log_interval',default=5, type=int)
 parser.add_argument('--no_workers',default=4, type=int)
 parser.add_argument('--model_val_path',default="enet_transformer.pt", type=str)
 parser.add_argument('--clip_size',default=32, type=int)
-parser.add_argument('--nhead',default=4, type=int)
-parser.add_argument('--num_encoder_layers',default=3, type=int)
-parser.add_argument('--num_decoder_layers',default=3, type=int)
-parser.add_argument('--transformer_in_channel',default=32, type=int)
+parser.add_argument('--hidden_channels',default=256, type=int)
+parser.add_argument('--get_multilevel_features',default=False, type=bool)
 parser.add_argument('--train_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/annotation", type=str)
 parser.add_argument('--val_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/val", type=str)
 
 args = parser.parse_args()
 print(args)
 
-file_weight = './S3D_kinetics400.pt'
-
-model = TASED_v2(
-	transformer_in_channel=args.transformer_in_channel, 
-	use_transformer=True, 
-	num_encoder_layers=args.num_encoder_layers, 
-	nhead=args.nhead
+model = CombinedModel(
+	hidden_channel=args.hidden_channel, 
+    get_multilevel_features=args.get_multilevel_features
 )
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.device_count() > 1:
+    print("Let's use", torch.cuda.device_count(), "GPUs!")
+    model = nn.DataParallel(model)
+model.to(device)
 
 # for (name, param) in model.named_parameters():
 #     if param.requires_grad:
@@ -81,64 +83,17 @@ val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val")
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.no_workers)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
 
-if os.path.isfile(file_weight):
-    print ('loading weight file')
-    weight_dict = torch.load(file_weight)
-    model_dict = model.state_dict()
-    for name, param in weight_dict.items():
-        if 'module' in name:
-            name = '.'.join(name.split('.')[1:])
-        if 'base.' in name:
-            bn = int(name.split('.')[1])
-            sn_list = [0, 5, 8, 14]
-            sn = sn_list[0]
-            if bn >= sn_list[1] and bn < sn_list[2]:
-                sn = sn_list[1]
-            elif bn >= sn_list[2] and bn < sn_list[3]:
-                sn = sn_list[2]
-            elif bn >= sn_list[3]:
-                sn = sn_list[3]
-            name = '.'.join(name.split('.')[2:])
-            name = 'base%d.%d.'%(sn_list.index(sn)+1, bn-sn)+name
-        if name in model_dict:
-            if param.size() == model_dict[name].size():
-                model_dict[name].copy_(param)
-            else:
-                print (' size? ' + name, param.size(), model_dict[name].size())
-        else:
-            print (' name? ' + name)
-
-    print (' loaded')
-else:
-    print ('weight file?')
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if torch.cuda.device_count() > 1:
-    print("Let's use", torch.cuda.device_count(), "GPUs!")
-    model = nn.DataParallel(model)
-model.to(device)
 
 # parameter setting for fine-tuning
-if args.optim == "SGD":
-    params = []
-    for key, value in dict(model.named_parameters()).items():
-        if 'convtsp' in key:
-            params += [{'params':[value], 'key':key+'(new)'}]
-        else:
-            params += [{'params':[value], 'lr':0.001, 'key':key}]
-
-    optimizer = torch.optim.SGD(params, lr=0.1, momentum=0.9, weight_decay=2e-7)
-
-else:
+if args.optim == "Adam":
     params = list(filter(lambda p: p.requires_grad, model.parameters())) 
     optimizer = torch.optim.Adam(params, lr=args.lr)
-
-# if args.optim=="Adagrad":
-#     optimizer = torch.optim.Adagrad(params, lr=args.lr)
-# if args.optim=="SGD":
-#     optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9)
-# if args.lr_sched:
-#     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=0.1)
+elif args.optim=="Adagrad":
+    optimizer = torch.optim.Adagrad(params, lr=args.lr)
+elif args.optim=="SGD":
+    optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9)
+if args.lr_sched:
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=0.1)
 
 print(device)
 
@@ -149,16 +104,18 @@ def train(model, optimizer, loader, epoch, device, args):
     total_loss = AverageMeter()
     cur_loss = AverageMeter()
 
-    for idx, (img_clips, gt_sal) in enumerate(loader):
+    for idx, (img_clips, gt_sal_clips) in enumerate(loader):
         img_clips = img_clips.to(device)
-        img_clips = img_clips.permute((0,2,1,3,4))
-        gt_sal = gt_sal.to(device)
+        img_clips = img_clips.permute((1,0,2,3,4))      
+        gt_sal_clips = gt_sal_clips.permute((1,0,2,3))
+         
+        gt_sal_clips = gt_sal_clips.to(device)
         
         optimizer.zero_grad()
         pred_sal = model(img_clips)
-        assert pred_sal.size() == gt_sal.size()
+        assert pred_sal.size() == gt_sal_clips.size()
 
-        loss = loss_func(pred_sal, gt_sal, args)
+        loss = loss_func(pred_sal, gt_sal_clips, args)
         loss.backward()
         optimizer.step()
         total_loss.update(loss.item())
@@ -180,27 +137,29 @@ def validate(model, loader, epoch, device, args):
     total_loss = AverageMeter()
     total_cc_loss = AverageMeter()
     tic = time.time()
-    for idx, (img_clips, gt_sal) in enumerate(loader):
+    for idx, (img_clips, gt_sal_clips) in enumerate(loader):
         img_clips = img_clips.to(device)
-        img_clips = img_clips.permute((0,2,1,3,4))
+        img_clips = img_clips.permute((1,0,2,3,4))
+        gt_sal_clips = gt_sal_clips.permute((1,0,2,3))
         
-        pred_sal = model(img_clips)
+        pred_sal_clips = model(img_clips)
         
-        gt_sal = gt_sal.squeeze(0).numpy()
+        for i in range(pred_sal_clips.size(0)):
+            gt_sal = gt_sal_clips[i].squeeze(0).numpy()
 
-        pred_sal = pred_sal.cpu().squeeze(0).numpy()
-        pred_sal = cv2.resize(pred_sal, (gt_sal.shape[1], gt_sal.shape[0]))
-        pred_sal = blur(pred_sal).unsqueeze(0).cuda()
+            pred_sal = pred_sal_clips[i].cpu().squeeze(0).numpy()
+            pred_sal = cv2.resize(pred_sal, (gt_sal.shape[1], gt_sal.shape[0]))
+            pred_sal = blur(pred_sal).unsqueeze(0).cuda()
 
-        gt_sal = torch.FloatTensor(gt_sal).unsqueeze(0).cuda()
+            gt_sal = torch.FloatTensor(gt_sal).unsqueeze(0).cuda()
 
-        assert pred_sal.size() == gt_sal.size()
+            assert pred_sal.size() == gt_sal.size()
 
-        loss = loss_func(pred_sal, gt_sal, args)
-        cc_loss = cc(pred_sal, gt_sal)
+            loss = loss_func(pred_sal, gt_sal, args)
+            cc_loss = cc(pred_sal, gt_sal)
 
-        total_loss.update(loss.item())
-        total_cc_loss.update(cc_loss.item())
+            total_loss.update(loss.item())
+            total_cc_loss.update(cc_loss.item())
 
     print('[{:2d}, val] avg_loss : {:.5f} cc_loss : {:.5f}, time : {:3f}'.format(epoch, total_loss.avg, total_cc_loss.avg, (time.time()-tic)/60))
     sys.stdout.flush()
@@ -227,11 +186,3 @@ for epoch in range(0, args.no_epochs):
 
     if args.lr_sched:
         scheduler.step()
-
-''' Sliding Window testing '''
-
-val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="perframe")
-sliding_val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
-
-validate(best_model, sliding_val_loader, 0, device, args)
-# os.system("python3 validate.py")
