@@ -51,7 +51,7 @@ for i = 1:length(frames)
     map_gt_path = strrep(gt_fold,'/images', '/maps/');
     fix_gt_path = strrep(gt_fold,'/images', '/fixation/maps/');
     map_eval_path = strrep(gt_fold, options.DS_GT_DIR, options.SALIENCY_DIR);
-    %disp(map_gt_path)
+    % disp(map_gt_path)
     saliency_path = [map_gt_path, gt_name];
     
 %     if ~exist(saliency_path,'file')
@@ -63,7 +63,7 @@ for i = 1:length(frames)
     load(fixation_path);
     
     result = double(imread([map_eval_path(1:end-6), gt_name]));
-    %disp([map_eval_path(1:end-6), gt_name]);
+    % disp([map_eval_path(1:end-6), gt_name]);
     result = result(:,:,1);
     result = imresize(result, [size(I,1) size(I,2)]);
     if any(strcmp(metricName, {'similarity','CC', 'EMD'}))

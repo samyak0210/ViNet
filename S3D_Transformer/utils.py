@@ -6,9 +6,9 @@ from torchvision import transforms, utils
 from PIL import Image
 
 
-def loss_func(pred_map, gt, args):
+def get_loss(pred_map, gt, args):
     loss = torch.FloatTensor([0.0]).cuda()
-    criterion = nn.L1Loss()
+    # print(pred_map.size(), gt.size())
     if args.kldiv:
         loss += args.kldiv_coeff * kldiv(pred_map, gt)
     if args.cc:
@@ -17,7 +17,27 @@ def loss_func(pred_map, gt, args):
         loss += args.l1_coeff * criterion(pred_map, gt)
     if args.sim:
         loss += args.sim_coeff * similarity(pred_map, gt)
+
     return loss
+
+def loss_func(pred_map, gt, args):
+    loss = torch.FloatTensor([0.0]).cuda()
+    criterion = nn.L1Loss()
+    assert pred_map.size() == gt.size()
+
+    if len(pred_map.size()) == 4:
+        ''' Clips: BxClXHxW '''
+        assert pred_map.size(0)==args.batch_size
+        pred_map = pred_map.permute((1,0,2,3))
+        gt = gt.permute((1,0,2,3))
+
+        for i in range(pred_map.size(0)):
+            loss += get_loss(pred_map[i], gt[i], args)
+
+        loss /= pred_map.size(0)
+        return loss
+    
+    return get_loss(pred_map, gt, args)
 
 class AverageMeter(object):
 
@@ -52,9 +72,10 @@ def img_save(tensor, fp, nrow=8, padding=2,
     ''' Add 0.5 after unnormalizing to [0, 255] to round to nearest integer '''
     
     ndarr = torch.round(grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0)).to('cpu', torch.uint8).numpy()
+    ndarr = ndarr[:,:,0]
     im = Image.fromarray(ndarr)
     exten = fp.split('.')[-1]
     if exten=="png":
-        im.save(fp, format=format, compress_level=0)
+        im.save(fp, format=format)
     else:
         im.save(fp, format=format, quality=100) #for jpg

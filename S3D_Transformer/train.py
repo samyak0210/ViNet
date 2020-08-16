@@ -1,5 +1,6 @@
 ''' Kl - CC '''
 ''' Output 2 / 32 frames with S3D '''
+''' Increasing time-step difference '''
 ''' ConvT -> Conv + Up '''
 ''' Finetuning using lr sched '''
 ''' Backbone with GRU/LSTM at highest level of heirarchy '''
@@ -19,10 +20,10 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch.nn.init as init
 import torch.nn.functional as F
-from dataloader import DHF1KDataset
+from dataloader import DHF1KDataset, DHF1KDatasetMultiFrame, DHF1KDatasetDualFrame
 from loss import *
 import cv2
-from model_hier import TASED_v2_hier as TASED_v2
+from model_hier import VideoSaliencyModel as TASED_v2
 from utils import *
 
 parser = argparse.ArgumentParser()
@@ -54,10 +55,11 @@ parser.add_argument('--model_val_path',default="enet_transformer.pt", type=str)
 parser.add_argument('--clip_size',default=32, type=int)
 parser.add_argument('--nhead',default=4, type=int)
 parser.add_argument('--num_encoder_layers',default=3, type=int)
-parser.add_argument('--num_decoder_layers',default=3, type=int)
+parser.add_argument('--num_decoder_layers',default=-1, type=int)
 parser.add_argument('--transformer_in_channel',default=32, type=int)
 parser.add_argument('--train_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/annotation", type=str)
 parser.add_argument('--val_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/val", type=str)
+parser.add_argument('--multi_frame',default=0, type=int)
 
 args = parser.parse_args()
 print(args)
@@ -67,16 +69,26 @@ file_weight = './S3D_kinetics400.pt'
 model = TASED_v2(
 	transformer_in_channel=args.transformer_in_channel, 
 	use_transformer=True, 
-	num_encoder_layers=args.num_encoder_layers, 
-	nhead=args.nhead
+    num_encoder_layers=args.num_encoder_layers, 
+	num_decoder_layers=args.num_decoder_layers, 
+	nhead=args.nhead,
+    multiFrame=args.multi_frame
 )
 
 # for (name, param) in model.named_parameters():
 #     if param.requires_grad:
 #         print(name, param.size())
 
-train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train")
-val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val")
+if args.multi_frame:
+    if args.multi_frame==2:
+        train_dataset = DHF1KDatasetDualFrame(args.train_path_data, args.clip_size, mode="train")
+        val_dataset = DHF1KDatasetDualFrame(args.val_path_data, args.clip_size, mode="val")    
+    else:
+        train_dataset = DHF1KDatasetMultiFrame(args.train_path_data, args.clip_size, mode="train")
+        val_dataset = DHF1KDatasetMultiFrame(args.val_path_data, args.clip_size, mode="val")    
+else:
+    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train")
+    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val")
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.no_workers)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
@@ -84,7 +96,7 @@ val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=Fals
 if os.path.isfile(file_weight):
     print ('loading weight file')
     weight_dict = torch.load(file_weight)
-    model_dict = model.state_dict()
+    model_dict = model.backbone.state_dict()
     for name, param in weight_dict.items():
         if 'module' in name:
             name = '.'.join(name.split('.')[1:])
@@ -109,6 +121,7 @@ if os.path.isfile(file_weight):
             print (' name? ' + name)
 
     print (' loaded')
+    model.backbone.load_state_dict(model_dict)
 else:
     print ('weight file?')
 
@@ -168,7 +181,7 @@ def train(model, optimizer, loader, epoch, device, args):
             print('[{:2d}, {:5d}] avg_loss : {:.5f}, time:{:3f} minutes'.format(epoch, idx, cur_loss.avg, (time.time()-tic)/60))
             cur_loss.reset()
             sys.stdout.flush()
-
+        
     print('[{:2d}, train] avg_loss : {:.5f}'.format(epoch, total_loss.avg))
     sys.stdout.flush()
 
@@ -207,12 +220,52 @@ def validate(model, loader, epoch, device, args):
 
     return total_loss.avg
 
+def validateMulti(model, loader, epoch, device, args):
+    model.eval()
+    tic = time.time()
+    total_loss = AverageMeter()
+    total_cc_loss = AverageMeter()
+    total_sim_loss = AverageMeter()
+    tic = time.time()
+    for idx, (img_clips, gt_sal_clips) in enumerate(loader):
+        img_clips = img_clips.to(device)
+        img_clips = img_clips.permute((0,2,1,3,4))
+        
+        pred_sal_clips = model(img_clips)
+        # print(pred_sal_clips.size(), gt_sal_clips.size())
+        for i in range(pred_sal_clips.size(1)):
+            gt_sal = gt_sal_clips[:,i,:,:].squeeze(0).numpy()
+
+            pred_sal = pred_sal_clips[:,i,:,:].cpu().squeeze(0).numpy()
+            pred_sal = cv2.resize(pred_sal, (gt_sal.shape[1], gt_sal.shape[0]))
+            pred_sal = blur(pred_sal).unsqueeze(0).cuda()
+
+            gt_sal = torch.FloatTensor(gt_sal).unsqueeze(0).cuda()
+
+            assert pred_sal.size() == gt_sal.size()
+
+            loss = loss_func(pred_sal, gt_sal, args)
+            cc_loss = cc(pred_sal, gt_sal)
+            sim_loss = similarity(pred_sal, gt_sal)
+
+            total_loss.update(loss.item())
+            total_cc_loss.update(cc_loss.item())
+            total_sim_loss.update(sim_loss.item())
+
+    print('[{:2d}, val] avg_loss : {:.5f} cc_loss : {:.5f} sim_loss : {:.5f}, time : {:3f}'.format(epoch, total_loss.avg, total_cc_loss.avg, total_sim_loss.avg, (time.time()-tic)/60))
+    sys.stdout.flush()
+
+    return total_loss.avg
+
 best_model = None
 for epoch in range(0, args.no_epochs):
     loss = train(model, optimizer, train_loader, epoch, device, args)
     
     with torch.no_grad():
-        val_loss = validate(model, val_loader, epoch, device, args)
+        if args.multi_frame:
+            val_loss = validateMulti(model, val_loader, epoch, device, args)
+        else:
+            val_loss = validate(model, val_loader, epoch, device, args)
         if epoch == 0 :
             best_loss = val_loss
         if val_loss <= best_loss:
@@ -230,8 +283,8 @@ for epoch in range(0, args.no_epochs):
 
 ''' Sliding Window testing '''
 
-val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="perframe")
-sliding_val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
+# val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="perframe")
+# sliding_val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
 
-validate(best_model, sliding_val_loader, 0, device, args)
+# validate(best_model, sliding_val_loader, 0, device, args)
 # os.system("python3 validate.py")

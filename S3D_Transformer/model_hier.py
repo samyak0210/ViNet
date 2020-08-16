@@ -23,32 +23,61 @@ class PositionalEncoding(nn.Module):
         return x
 
 class Transformer(nn.Module):
-    def __init__(self, feat_size, hidden_size=256, nhead=8, num_encoder_layers=6, max_len=4):
+    def __init__(self, feat_size, hidden_size=256, nhead=4, num_encoder_layers=3, max_len=4, num_decoder_layers=-1):
         super(Transformer, self).__init__()
         self.pos_encoder = PositionalEncoding(feat_size, max_len=max_len)
         encoder_layers = nn.TransformerEncoderLayer(feat_size, nhead, hidden_size)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
-
+        self.use_decoder = (num_decoder_layers != -1)
+        if self.use_decoder:
+            decoder_layers = nn.TransformerDecoderLayer(feat_size, nhead, hidden_size)
+            self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_decoder_layers, norm=nn.LayerNorm(hidden_size))
+            self.tgt_pos = nn.Embedding(max_len, hidden_size).weight
+            assert self.tgt_pos.requires_grad == True
 
     def forward(self, embeddings):
         ''' embeddings: CxBxCh*H*W '''
         # print(embeddings.shape)
+        batch_size = embeddings.size(1)
         x = self.pos_encoder(embeddings)
         x = self.transformer_encoder(x)
+        if self.use_decoder:
+            tgt_pos = self.tgt_pos.unsqueeze(1).repeat(1,batch_size,1)
+            tgt = torch.zeros_like(tgt_pos)
+            x = self.transformer_decoder(tgt + tgt_pos, x)
         return x
 
 class VideoSaliencyModel(nn.Module):
-    def __init__(self, transformer_in_channel=32, use_transformer=False, num_encoder_layers=3, nhead=4):
+    def __init__(self, 
+                transformer_in_channel=32, 
+                use_transformer=True, 
+                num_encoder_layers=3, 
+                num_decoder_layers=-1, 
+                nhead=4, 
+                multiFrame=0
+            ):
         super(VideoSaliencyModel, self).__init__()
         
         self.use_transformer = use_transformer
         if self.use_transformer:
             self.conv_in_1x1 = nn.Conv3d(in_channels=1024, out_channels=transformer_in_channel, kernel_size=1, stride=1, bias=True)
             self.conv_out_1x1 = nn.Conv3d(in_channels=transformer_in_channel, out_channels=1024, kernel_size=1, stride=1, bias=True)
-            self.transformer = Transformer(transformer_in_channel*7*12, hidden_size=transformer_in_channel*7*12, nhead=nhead, num_encoder_layers=num_encoder_layers)
+            self.transformer =  Transformer(
+                                    transformer_in_channel*7*12, 
+                                    hidden_size=transformer_in_channel*7*12, 
+                                    nhead=nhead,
+                                    num_encoder_layers=num_encoder_layers,
+                                    num_decoder_layers=num_decoder_layers
+                                )
 
         self.backbone = BackBoneS3D()
-        self.decoder = DecoderConvT()
+        if multiFrame:
+            if multiFrame==2:
+                self.decoder = DecoderConvTDualFrame()
+            else:
+                self.decoder = DecoderConvTMulti()
+        else:
+            self.decoder = DecoderConvT()
 
     def forward(self, x):
         [y0, y1, y2, y3] = self.backbone(x)
@@ -68,16 +97,10 @@ class VideoSaliencyModel(nn.Module):
         
         return self.decoder(y0, y1, y2, y3)
 
-class DecoderConvUpsample(nn.Module):
-    def __init__(self):
-        super(DecoderConvUpsample, self).__init__()
-
-        self.upsample = nn.Upsample(scale_factor=(1,2,2), mode='trilinear')
 
 class DecoderConvT(nn.Module):
     def __init__(self):
         super(DecoderConvT, self).__init__()
-
         self.convtsp1 = nn.Sequential(
             nn.Conv3d(1024, 1024, kernel_size=1, stride=1, bias=False),
             nn.ReLU(),
@@ -143,6 +166,150 @@ class DecoderConvT(nn.Module):
         # print('convtsp4', z.shape)
         
         z = z.view(z.size(0), z.size(3), z.size(4))
+        # print('output', z.shape)
+
+        return z
+
+class DecoderConvTDualFrame(nn.Module):
+    def __init__(self):
+        super(DecoderConvTDualFrame, self).__init__()
+
+        self.convtsp1 = nn.Sequential(
+            nn.Conv3d(1024, 1024, kernel_size=1, stride=1, bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(1024, 832, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+        self.convtsp2 = nn.Sequential(
+            nn.Conv3d(832, 832, kernel_size=(3,1,1), stride=(3,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(832, 480, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+        self.convtsp3 = nn.Sequential(
+            nn.Conv3d(480, 480, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(480, 192, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+
+        self.convtsp4 = nn.Sequential(
+            nn.Conv3d(192, 192, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(192, 64, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.Conv3d(64, 64, kernel_size=(2,1,1), stride=(2,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(64, 4, kernel_size=1, stride=1, bias=False),
+            nn.ReLU(),
+
+            nn.Conv3d(4, 4, kernel_size=(1,1,1), stride=(1,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(4, 4, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.Conv3d(4, 1, kernel_size=1, stride=1, bias=True),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, y0, y1, y2, y3):
+        z = self.convtsp1(y0)
+        # print('convtsp1', z.shape)
+
+        z = torch.cat((z,y1), 2)
+        # print('cat_convtsp1', z.shape)
+        
+        z = self.convtsp2(z)
+        # print('convtsp2', z.shape)
+
+        z = torch.cat((z,y2), 2)
+        # print('cat_convtsp2', z.shape)
+        
+        z = self.convtsp3(z)
+        # print('convtsp3', z.shape)
+
+        z = torch.cat((z,y3), 2)
+        # print("cat_convtsp3", z.shape)
+        
+        z = self.convtsp4(z)
+        # print('convtsp4', z.shape)
+        
+        z = z.view(z.size(0), z.size(2), z.size(3), z.size(4))
+        # print('output', z.shape)
+
+        return z
+
+class DecoderConvTMulti(nn.Module):
+    def __init__(self):
+        super(DecoderConvTMulti, self).__init__()
+
+        self.convtsp1 = nn.Sequential(
+            nn.Conv3d(1024, 1024, kernel_size=1, stride=1, bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(1024, 832, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+        self.convtsp2 = nn.Sequential(
+            nn.Conv3d(832, 832, kernel_size=(3,1,1), stride=(3,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(832, 480, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+        self.convtsp3 = nn.Sequential(
+            nn.Conv3d(480, 480, kernel_size=(5,1,1), stride=(5,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(480, 192, kernel_size=(1,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+        )
+        self.convtsp4 = nn.Sequential(
+            nn.ConvTranspose3d(192, 64, kernel_size=(5,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.Conv3d(64, 64, kernel_size=(3,1,1), padding=(1,0,0), stride=(1,1,1), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(64, 4, kernel_size=(5,1,1), stride=1, bias=False),
+            nn.ReLU(),
+
+            nn.Conv3d(4, 4, kernel_size=(3,1,1), stride=(1,1,1), padding=(1,0,0), bias=False),
+            nn.ReLU(),
+
+            nn.ConvTranspose3d(4, 4, kernel_size=(5,4,4), stride=(1,2,2), padding=(0,1,1), bias=False),
+            nn.Conv3d(4, 1, kernel_size=1, stride=1, bias=True),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, y0, y1, y2, y3):
+        z = self.convtsp1(y0)
+        # print('convtsp1', z.shape)
+
+        z = torch.cat((z,y1), 2)
+        # print('cat_convtsp1', z.shape)
+        
+        z = self.convtsp2(z)
+        # print('convtsp2', z.shape)
+
+        z = torch.cat((z,y2), 2)
+        # print('cat_convtsp2', z.shape)
+        
+        z = self.convtsp3(z)
+        # print('convtsp3', z.shape)
+
+        z = torch.cat((z,y3), 2)
+        # print("cat_convtsp3", z.shape)
+        
+        z = self.convtsp4(z)
+        # print('convtsp4', z.shape)
+        
+        z = z.view(z.size(0), z.size(2), z.size(3), z.size(4))
         # print('output', z.shape)
 
         return z
@@ -278,6 +445,8 @@ class TASED_v2_hier(nn.Module):
             nn.Sigmoid(),
         )
 
+        
+
     def forward(self, x):
         # print('input', x.shape)
         y3 = self.base1(x)
@@ -339,8 +508,7 @@ class TASED_v2_hier(nn.Module):
         
         z = self.convtsp4(z)
         # print('convtsp4', z.shape)
-        
-        z = z.view(z.size(0), z.size(3), z.size(4))
+        z = z.view(z.size(0), z.size(3), z.size(4))        
         # print('output', z.shape)
 
         return z
