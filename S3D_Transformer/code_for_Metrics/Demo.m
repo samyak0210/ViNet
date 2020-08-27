@@ -28,7 +28,7 @@ Metrics{3} = 'NSS';
 Metrics{4} = 'AUC_Judd';
 Metrics{5} = 'AUC_shuffled';
 
-Results{1} = 'best_model';
+Results{1} = 'no_trans_upsampling_reduced';
 
 for i = 3:3 %length(Datasets)
     Datasets{i};
@@ -45,7 +45,7 @@ for i = 3:3 %length(Datasets)
         end
         options.IMG_DIR = [options.DS_GT_DIR, '*/images/'];
         % // disp(options.IMG_DIR);
-        for j = 1:1 %length(Metrics)
+        for j = 5:5 %length(Metrics)
             if ~exist([CACHE Datasets{i} '_' Results{k} '_' Metrics{j} '.mat'], 'file')                 
                 [result, allMetric, ~] = evaluationFunc(options, Metrics{j});
                 % save([CACHE Datasets{i} '_' Results{k} '_' Metrics{j} '.mat'], 'result');

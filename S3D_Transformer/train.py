@@ -20,14 +20,14 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch.nn.init as init
 import torch.nn.functional as F
-from dataloader import DHF1KDataset, DHF1KDatasetMultiFrame, DHF1KDatasetDualFrame
+from dataloader import DHF1KDataset, DHF1KDatasetMultiFrame, DHF1KDatasetDualFrame, DHF1KDataset8Frame
 from loss import *
 import cv2
-from model_hier import VideoSaliencyModel as TASED_v2
+from model_hier import VideoSaliencyMultiModel, VideoSaliencyModel, VideoSaliencyChannel, VideoSaliencyChannelConcat
 from utils import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--no_epochs',default=60, type=int)
+parser.add_argument('--no_epochs',default=50, type=int)
 parser.add_argument('--lr',default=1e-4, type=float)
 parser.add_argument('--kldiv',default=True, type=bool)
 parser.add_argument('--cc',default=False, type=bool)
@@ -60,20 +60,74 @@ parser.add_argument('--transformer_in_channel',default=32, type=int)
 parser.add_argument('--train_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/annotation", type=str)
 parser.add_argument('--val_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/val", type=str)
 parser.add_argument('--multi_frame',default=0, type=int)
+parser.add_argument('--decoder_upsample',default=1, type=int)
+parser.add_argument('--frame_no',default="last", type=str)
+parser.add_argument('--load_weight',default="None", type=str)
+parser.add_argument('--train_random_idx',default=False, type=bool)
 
 args = parser.parse_args()
 print(args)
 
 file_weight = './S3D_kinetics400.pt'
 
-model = TASED_v2(
-	transformer_in_channel=args.transformer_in_channel, 
-	use_transformer=True, 
-    num_encoder_layers=args.num_encoder_layers, 
-	num_decoder_layers=args.num_decoder_layers, 
-	nhead=args.nhead,
-    multiFrame=args.multi_frame
-)
+if args.multi_frame==8:
+    model = VideoSaliencyModel(
+            transformer_in_channel=args.transformer_in_channel, 
+            use_transformer=False, 
+            num_encoder_layers=args.num_encoder_layers, 
+            num_decoder_layers=args.num_decoder_layers, 
+            nhead=args.nhead,
+            multiFrame=args.multi_frame,
+            use_upsample=bool(args.decoder_upsample)    
+        ) 
+
+elif args.multi_frame==32:
+    model = VideoSaliencyMultiModel(
+    	transformer_in_channel=args.transformer_in_channel, 
+    	use_transformer=True, 
+        num_encoder_layers=args.num_encoder_layers, 
+    	num_decoder_layers=args.num_decoder_layers, 
+    	nhead=args.nhead,
+        multiFrame=args.multi_frame
+    )
+else:
+    ''' No transformer - S3D + ConvT + Up'''
+    model = VideoSaliencyModel(
+        transformer_in_channel=args.transformer_in_channel, 
+        use_transformer=False, 
+        num_encoder_layers=args.num_encoder_layers, 
+        num_decoder_layers=args.num_decoder_layers, 
+        nhead=args.nhead,
+        multiFrame=args.multi_frame,
+        use_upsample=bool(args.decoder_upsample)
+    )
+
+    ''' Channels as sequence '''
+    # model = VideoSaliencyChannel(
+    #     transformer_in_channel=args.transformer_in_channel, 
+    #     use_transformer=True, 
+    #     num_encoder_layers=args.num_encoder_layers, 
+    #     num_decoder_layers=args.num_decoder_layers, 
+    #     nhead=args.nhead,
+    #     multiFrame=args.multi_frame,
+    #     use_upsample=bool(args.decoder_upsample)
+    # )
+
+    ''' Channel Concat '''
+    # model = VideoSaliencyChannelConcat(
+    #     transformer_in_channel=args.transformer_in_channel, 
+    #     use_transformer=False,
+    #     num_encoder_layers=args.num_encoder_layers, 
+    #     num_decoder_layers=args.num_decoder_layers, 
+    #     nhead=args.nhead,
+    #     multiFrame=args.multi_frame,
+    # )
+
+
+np.random.seed(0)
+torch.manual_seed(0)
+
+print(model.use_transformer, model.decoder, model.transformer if model.use_transformer else 0)
 
 # for (name, param) in model.named_parameters():
 #     if param.requires_grad:
@@ -83,12 +137,15 @@ if args.multi_frame:
     if args.multi_frame==2:
         train_dataset = DHF1KDatasetDualFrame(args.train_path_data, args.clip_size, mode="train")
         val_dataset = DHF1KDatasetDualFrame(args.val_path_data, args.clip_size, mode="val")    
+    elif args.multi_frame==8:
+        train_dataset = DHF1KDataset8Frame(args.train_path_data, args.clip_size, mode="train")
+        val_dataset = DHF1KDataset8Frame(args.val_path_data, args.clip_size, mode="val")
     else:
         train_dataset = DHF1KDatasetMultiFrame(args.train_path_data, args.clip_size, mode="train")
         val_dataset = DHF1KDatasetMultiFrame(args.val_path_data, args.clip_size, mode="val")    
 else:
-    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train")
-    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val")
+    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
+    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.no_workers)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
@@ -124,6 +181,10 @@ if os.path.isfile(file_weight):
     model.backbone.load_state_dict(model_dict)
 else:
     print ('weight file?')
+
+if args.load_weight!="None":
+    print("Loading weights: ",args.load_weight)
+    model.load_state_dict(torch.load(args.load_weight))
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.device_count() > 1:
@@ -168,7 +229,14 @@ def train(model, optimizer, loader, epoch, device, args):
         gt_sal = gt_sal.to(device)
         
         optimizer.zero_grad()
-        pred_sal = model(img_clips)
+        if args.multi_frame and args.train_random_idx:
+            idx_frame = np.random.randint(0, args.multi_frame)
+            gt_sal = gt_sal[:,idx_frame,...]
+            pred_sal = model(img_clips, idx=idx_frame)
+            pred_sal = pred_sal.squeeze(1)
+            # print(pred_sal.shape, gt_sal.shape)
+        else:
+            pred_sal = model(img_clips)
         assert pred_sal.size() == gt_sal.size()
 
         loss = loss_func(pred_sal, gt_sal, args)
@@ -181,7 +249,7 @@ def train(model, optimizer, loader, epoch, device, args):
             print('[{:2d}, {:5d}] avg_loss : {:.5f}, time:{:3f} minutes'.format(epoch, idx, cur_loss.avg, (time.time()-tic)/60))
             cur_loss.reset()
             sys.stdout.flush()
-        
+        # break
     print('[{:2d}, train] avg_loss : {:.5f}'.format(epoch, total_loss.avg))
     sys.stdout.flush()
 
@@ -230,9 +298,9 @@ def validateMulti(model, loader, epoch, device, args):
     for idx, (img_clips, gt_sal_clips) in enumerate(loader):
         img_clips = img_clips.to(device)
         img_clips = img_clips.permute((0,2,1,3,4))
-        
         pred_sal_clips = model(img_clips)
-        # print(pred_sal_clips.size(), gt_sal_clips.size())
+        # print(pred_sal_clips.shape, gt_sal_clips.shape)
+        
         for i in range(pred_sal_clips.size(1)):
             gt_sal = gt_sal_clips[:,i,:,:].squeeze(0).numpy()
 

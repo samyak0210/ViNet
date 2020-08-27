@@ -4,7 +4,8 @@
 
 % load global parameters, you should set up the "ROOT_DIR" to your own path
 % for data.
-clear all
+function exitcode = Demo1(model_name)
+
 % METRIC_DIR = 'code_forMetrics';
 % addpath(genpath(METRIC_DIR));
 
@@ -26,9 +27,11 @@ Metrics{1} = 'CC';
 Metrics{2} = 'similarity'; 
 Metrics{3} = 'NSS';
 Metrics{4} = 'AUC_Judd';
-% Metrics{5} = 'AUC_shuffled';
+Metrics{5} = 'AUC_shuffled';
+% disp(model_name);
+exitcode = 0;
 
-Results{1} = 'best_model';
+Results{1} = model_name;
 
 for i = 3:3 %length(Datasets)
     Datasets{i};
@@ -64,3 +67,4 @@ for i = 3:3 %length(Datasets)
 end
 
 %%
+end

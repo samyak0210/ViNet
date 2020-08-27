@@ -79,3 +79,7 @@ def img_save(tensor, fp, nrow=8, padding=2,
         im.save(fp, format=format)
     else:
         im.save(fp, format=format, quality=100) #for jpg
+
+
+def num_params(model):
+    return sum(dict((p.data_ptr(), p.numel()) for p in model.parameters()).values())
