@@ -20,10 +20,10 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch.nn.init as init
 import torch.nn.functional as F
-from dataloader import DHF1KDataset, DHF1KDatasetMultiFrame, DHF1KDatasetDualFrame, DHF1KDataset8Frame
+from dataloader import * 
 from loss import *
 import cv2
-from model_hier import VideoSaliencyMultiModel, VideoSaliencyModel, VideoSaliencyChannel, VideoSaliencyChannelConcat
+from model_hier import VideoSaliencyMultiModel, VideoSaliencyModel
 from utils import *
 
 parser = argparse.ArgumentParser()
@@ -55,7 +55,7 @@ parser.add_argument('--model_val_path',default="enet_transformer.pt", type=str)
 parser.add_argument('--clip_size',default=32, type=int)
 parser.add_argument('--nhead',default=4, type=int)
 parser.add_argument('--num_encoder_layers',default=3, type=int)
-parser.add_argument('--num_decoder_layers',default=-1, type=int)
+parser.add_argument('--num_decoder_layers',default=3, type=int)
 parser.add_argument('--transformer_in_channel',default=32, type=int)
 parser.add_argument('--train_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/annotation", type=str)
 parser.add_argument('--val_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/val", type=str)
@@ -63,25 +63,15 @@ parser.add_argument('--multi_frame',default=0, type=int)
 parser.add_argument('--decoder_upsample',default=1, type=int)
 parser.add_argument('--frame_no',default="last", type=str)
 parser.add_argument('--load_weight',default="None", type=str)
-parser.add_argument('--train_random_idx',default=False, type=bool)
+parser.add_argument('--num_hier',default=3, type=int)
+parser.add_argument('--dataset',default="DHF1KDataset", type=str)
 
 args = parser.parse_args()
 print(args)
 
 file_weight = './S3D_kinetics400.pt'
 
-if args.multi_frame==8:
-    model = VideoSaliencyModel(
-            transformer_in_channel=args.transformer_in_channel, 
-            use_transformer=False, 
-            num_encoder_layers=args.num_encoder_layers, 
-            num_decoder_layers=args.num_decoder_layers, 
-            nhead=args.nhead,
-            multiFrame=args.multi_frame,
-            use_upsample=bool(args.decoder_upsample)    
-        ) 
-
-elif args.multi_frame==32:
+if args.multi_frame==32:
     model = VideoSaliencyMultiModel(
     	transformer_in_channel=args.transformer_in_channel, 
     	use_transformer=True, 
@@ -94,12 +84,9 @@ else:
     ''' No transformer - S3D + ConvT + Up'''
     model = VideoSaliencyModel(
         transformer_in_channel=args.transformer_in_channel, 
-        use_transformer=False, 
-        num_encoder_layers=args.num_encoder_layers, 
-        num_decoder_layers=args.num_decoder_layers, 
         nhead=args.nhead,
-        multiFrame=args.multi_frame,
-        use_upsample=bool(args.decoder_upsample)
+        use_upsample=bool(args.decoder_upsample),
+        num_hier=args.num_hier
     )
 
     ''' Channels as sequence '''
@@ -127,25 +114,40 @@ else:
 np.random.seed(0)
 torch.manual_seed(0)
 
-print(model.use_transformer, model.decoder, model.transformer if model.use_transformer else 0)
+print(model.decoder)
 
 # for (name, param) in model.named_parameters():
 #     if param.requires_grad:
 #         print(name, param.size())
 
-if args.multi_frame:
-    if args.multi_frame==2:
-        train_dataset = DHF1KDatasetDualFrame(args.train_path_data, args.clip_size, mode="train")
-        val_dataset = DHF1KDatasetDualFrame(args.val_path_data, args.clip_size, mode="val")    
-    elif args.multi_frame==8:
-        train_dataset = DHF1KDataset8Frame(args.train_path_data, args.clip_size, mode="train")
-        val_dataset = DHF1KDataset8Frame(args.val_path_data, args.clip_size, mode="val")
-    else:
-        train_dataset = DHF1KDatasetMultiFrame(args.train_path_data, args.clip_size, mode="train")
-        val_dataset = DHF1KDatasetMultiFrame(args.val_path_data, args.clip_size, mode="val")    
+if args.dataset == "DHF1KDataset":
+    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
+    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
 else:
-    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
-    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
+    train_dataset = Hollywood_UCFDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
+    print(len(train_dataset))
+    val_dataset = Hollywood_UCFDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
+
+# if args.multi_frame:
+#     if args.dataset == "DHF1KDataset":
+#         train_dataset = DHF1KDatasetMultiFrame(args.train_path_data, args.clip_size, mode="train")
+#         val_dataset = DHF1KDatasetMultiFrame(args.val_path_data, args.clip_size, mode="val")
+#     elif args.dataset == "UCF":
+#         train_dataset = UCFMultiFrameDataset(args.train_path_data, args.clip_size, mode="train")
+#         val_dataset = UCFMultiFrameDataset(args.val_path_data, args.clip_size, mode="val")
+#     elif args.dataset == "Hollywood":
+#         train_dataset = HollywoodDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
+#         val_dataset = HollywoodDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
+# else:
+#     if args.dataset=="DHF1KDataset":
+#         train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
+#         val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
+#     elif args.dataset=="UCF":
+#         train_dataset = UCFDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
+#         val_dataset = UCFDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
+#     elif args.dataset=="Hollywood":
+#         train_dataset = HollywoodDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
+#         val_dataset = HollywoodDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.no_workers)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
@@ -229,14 +231,15 @@ def train(model, optimizer, loader, epoch, device, args):
         gt_sal = gt_sal.to(device)
         
         optimizer.zero_grad()
-        if args.multi_frame and args.train_random_idx:
+        if args.multi_frame:
             idx_frame = np.random.randint(0, args.multi_frame)
+            # print(idx_frame)
             gt_sal = gt_sal[:,idx_frame,...]
-            pred_sal = model(img_clips, idx=idx_frame)
+            pred_sal = model(img_clips, idx_frame)
             pred_sal = pred_sal.squeeze(1)
             # print(pred_sal.shape, gt_sal.shape)
         else:
-            pred_sal = model(img_clips)
+            pred_sal = model(img_clips, -1)
         assert pred_sal.size() == gt_sal.size()
 
         loss = loss_func(pred_sal, gt_sal, args)
@@ -249,7 +252,7 @@ def train(model, optimizer, loader, epoch, device, args):
             print('[{:2d}, {:5d}] avg_loss : {:.5f}, time:{:3f} minutes'.format(epoch, idx, cur_loss.avg, (time.time()-tic)/60))
             cur_loss.reset()
             sys.stdout.flush()
-        # break
+            
     print('[{:2d}, train] avg_loss : {:.5f}'.format(epoch, total_loss.avg))
     sys.stdout.flush()
 
@@ -260,6 +263,7 @@ def validate(model, loader, epoch, device, args):
     tic = time.time()
     total_loss = AverageMeter()
     total_cc_loss = AverageMeter()
+    total_sim_loss = AverageMeter()
     tic = time.time()
     for idx, (img_clips, gt_sal) in enumerate(loader):
         img_clips = img_clips.to(device)
@@ -279,11 +283,13 @@ def validate(model, loader, epoch, device, args):
 
         loss = loss_func(pred_sal, gt_sal, args)
         cc_loss = cc(pred_sal, gt_sal)
+        sim_loss = similarity(pred_sal, gt_sal)
 
         total_loss.update(loss.item())
         total_cc_loss.update(cc_loss.item())
+        total_sim_loss.update(sim_loss.item())
 
-    print('[{:2d}, val] avg_loss : {:.5f} cc_loss : {:.5f}, time : {:3f}'.format(epoch, total_loss.avg, total_cc_loss.avg, (time.time()-tic)/60))
+    print('[{:2d}, val] avg_loss : {:.5f} cc_loss : {:.5f} sim_loss : {:.5f}, time : {:3f}'.format(epoch, total_loss.avg, total_cc_loss.avg, total_sim_loss.avg, (time.time()-tic)/60))
     sys.stdout.flush()
 
     return total_loss.avg
@@ -298,7 +304,7 @@ def validateMulti(model, loader, epoch, device, args):
     for idx, (img_clips, gt_sal_clips) in enumerate(loader):
         img_clips = img_clips.to(device)
         img_clips = img_clips.permute((0,2,1,3,4))
-        pred_sal_clips = model(img_clips)
+        pred_sal_clips = model(img_clips, -1)
         # print(pred_sal_clips.shape, gt_sal_clips.shape)
         
         for i in range(pred_sal_clips.size(1)):
@@ -348,11 +354,3 @@ for epoch in range(0, args.no_epochs):
 
     if args.lr_sched:
         scheduler.step()
-
-''' Sliding Window testing '''
-
-# val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="perframe")
-# sliding_val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
-
-# validate(best_model, sliding_val_loader, 0, device, args)
-# os.system("python3 validate.py")

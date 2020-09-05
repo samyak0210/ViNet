@@ -18,8 +18,8 @@ end
 options.Result_path = '/ssd_scratch/cvit/samyak/Results/';
 options.DS_path = '/ssd_scratch/cvit/samyak/';
 
-Datasets{1} = 'UCF sports';
-Datasets{2} = 'Hollywood-2';
+Datasets{1} = 'UCF';
+Datasets{2} = 'Hollywood';
 Datasets{3} = 'DHF1K';
 
 
@@ -33,7 +33,7 @@ exitcode = 0;
 
 Results{1} = model_name;
 
-for i = 3:3 %length(Datasets)
+for i = 2:2 %length(Datasets)
     Datasets{i};
     for k =1: length(Results)
         % saliency prediction results
@@ -44,7 +44,7 @@ for i = 3:3 %length(Datasets)
         if isequal(Datasets{i}, 'DHF1K'),
             options.DS_GT_DIR = [options.DS_path Datasets{i} '/val/'];
         else
-            options.DS_GT_DIR = [options.DS_path Datasets{i} '/test/'];
+            options.DS_GT_DIR = [options.DS_path Datasets{i} '/testing/'];
         end
         options.IMG_DIR = [options.DS_GT_DIR, '*/images/'];
         % // disp(options.IMG_DIR);

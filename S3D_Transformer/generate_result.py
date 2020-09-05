@@ -3,7 +3,7 @@ import os
 import numpy as np
 import cv2
 import torch
-from model_hier import VideoSaliencyModel, VideoSaliencyChannel, VideoSaliencyChannelConcat
+from model_hier import VideoSaliencyModel
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
 import argparse
@@ -17,7 +17,7 @@ from torchvision import transforms, utils
 from os.path import join
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+print(device)
 def validate(args):
     ''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
     # optional two command-line arguments
@@ -26,15 +26,12 @@ def validate(args):
 
     len_temporal = 32
 
-    # model = VideoSaliencyModel(
-    #     transformer_in_channel=args.transformer_in_channel, 
-    #     use_transformer=False, 
-    #     num_encoder_layers=args.num_encoder_layers, 
-    #     num_decoder_layers=args.num_decoder_layers, 
-    #     nhead=args.nhead,
-    #     multiFrame=args.multi_frame,
-    #     use_upsample=bool(args.decoder_upsample)
-    # )
+    model = VideoSaliencyModel(
+        transformer_in_channel=args.transformer_in_channel, 
+        nhead=args.nhead,
+        use_upsample=bool(args.decoder_upsample),
+        num_hier=args.num_hier
+    )
     # model = VideoSaliencyChannel(
     #     transformer_in_channel=args.transformer_in_channel, 
     #     use_transformer=True, 
@@ -44,14 +41,14 @@ def validate(args):
     #     multiFrame=args.multi_frame,
     #     use_upsample=bool(args.decoder_upsample)
     # )
-    model = VideoSaliencyChannelConcat(
-        transformer_in_channel=args.transformer_in_channel, 
-        use_transformer=False,
-        num_encoder_layers=args.num_encoder_layers, 
-        num_decoder_layers=args.num_decoder_layers, 
-        nhead=args.nhead,
-        multiFrame=args.multi_frame,
-    )
+    # model = VideoSaliencyChannelConcat(
+    #     transformer_in_channel=args.transformer_in_channel, 
+    #     use_transformer=False,
+    #     num_encoder_layers=args.num_encoder_layers, 
+    #     num_decoder_layers=args.num_decoder_layers, 
+    #     nhead=args.nhead,
+    #     multiFrame=args.multi_frame,
+    # )
     # mode = VideoSaliencyChannelConcat
 
     model.load_state_dict(torch.load(file_weight))
@@ -74,7 +71,7 @@ def validate(args):
         print ('processing ' + dname, flush=True)
         list_frames = [f for f in os.listdir(os.path.join(path_indata, dname, 'images')) if os.path.isfile(os.path.join(path_indata, dname, 'images', f))]
         list_frames.sort()
-        os.makedirs(join(args.save_path, dname), exist_ok=True)
+        # os.makedirs(join(args.save_path, dname), exist_ok=True)
 
         # process in a sliding window fashion
         if len(list_frames) >= 2*len_temporal-1:
@@ -120,13 +117,15 @@ def blur(img):
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
     ''' process one clip and save the predicted saliency map '''
+    import time
     with torch.no_grad():
+        tic=time.time()
         smap = model(clip.to(device)).cpu().data[0]
-    
     smap = smap.numpy()
     smap = cv2.resize(smap, (img_size[1], img_size[0]))
     smap = blur(smap)
-
+    print(time.time()-tic)
+    exit(0)
     img_save(smap, join(args.save_path, dname, frame_no), normalize=True)
 
 if __name__ == '__main__':
@@ -135,14 +134,14 @@ if __name__ == '__main__':
     parser.add_argument('--nhead',default=4, type=int)
     parser.add_argument('--num_encoder_layers',default=3, type=int)
     parser.add_argument('--transformer_in_channel',default=32, type=int)
-    parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/no_trans_upsampling_reduced', type=str)
+    parser.add_argument('--save_path',default='/ssd_scratch/cvit/navyasri/Results/final_dhf1k_test', type=str)
     parser.add_argument('--start_idx',default=-1, type=int)
     parser.add_argument('--num_parts',default=4, type=int)
-    parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/val/', type=str)
+    parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/test/', type=str)
     parser.add_argument('--multi_frame',default=0, type=int)
     parser.add_argument('--decoder_upsample',default=1, type=int)
     parser.add_argument('--num_decoder_layers',default=-1, type=int)
-
+    parser.add_argument('--num_hier',default=3, type=int)
     
     args = parser.parse_args()
     print(args)

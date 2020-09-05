@@ -3,13 +3,11 @@ import os
 import numpy as np
 import cv2
 import torch
-from model_hier import VideoSaliencyMultiModel
+from model_hier import *
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
 import argparse
-
-from torch.utils.data import DataLoader
-from dataloader import DHF1KDataset
+import copy
 from utils import *
 import time
 from tqdm import tqdm
@@ -26,14 +24,30 @@ def validate(args):
 
 	len_temporal = 32
 
-	model = VideoSaliencyMultiModel(
+	model = VideoSaliencyModel(
 		transformer_in_channel=args.transformer_in_channel, 
-		use_transformer=True,
-		num_encoder_layers=args.num_encoder_layers, 
-		num_decoder_layers=args.num_decoder_layers, 
 		nhead=args.nhead,
-		multiFrame=args.multi_frame,
+		use_upsample=bool(args.decoder_upsample),
+		num_hier=3
 	)
+	# model = VideoSaliencyChannel(
+	#     transformer_in_channel=args.transformer_in_channel, 
+	#     use_transformer=True, 
+	#     num_encoder_layers=args.num_encoder_layers, 
+	#     num_decoder_layers=args.num_decoder_layers, 
+	#     nhead=args.nhead,
+	#     multiFrame=args.multi_frame,
+	#     use_upsample=bool(args.decoder_upsample)
+	# )
+	# model = VideoSaliencyChannelConcat(
+	#     transformer_in_channel=args.transformer_in_channel, 
+	#     use_transformer=False,
+	#     num_encoder_layers=args.num_encoder_layers, 
+	#     num_decoder_layers=args.num_decoder_layers, 
+	#     nhead=args.nhead,
+	#     multiFrame=args.multi_frame,
+	# )
+	# mode = VideoSaliencyChannelConcat
 
 	model.load_state_dict(torch.load(file_weight))
 
@@ -55,48 +69,43 @@ def validate(args):
 		print ('processing ' + dname, flush=True)
 		list_frames = [f for f in os.listdir(os.path.join(path_indata, dname, 'images')) if os.path.isfile(os.path.join(path_indata, dname, 'images', f))]
 		list_frames.sort()
+		# print(list_frames)
+
 		os.makedirs(join(args.save_path, dname), exist_ok=True)
 
-		arr = []
-		
-		for i in range(0, len(list_frames) - len(list_frames)%(2*len_temporal-2), 2*len_temporal-2):
-			snippet = []
-			for j in range(i,i+len_temporal-1):
-				if(len(snippet)==0):
-					for k in range(j,j+len_temporal):
-						torch_img, img_size = torch_transform(os.path.join(path_indata, dname, 'images', list_frames[k]))
-						snippet.append(torch_img)
-				else:
-					torch_img, img_size = torch_transform(os.path.join(path_indata, dname, 'images', list_frames[j+len_temporal-1]))
-					snippet.append(torch_img)
-					del snippet[0]
+		# process in a sliding window fashion
+		idx = 0
+		ln = len(list_frames)
+		flg = 1
+		if ln < 2*len_temporal-1:
+			flg=0
+			temp = [list_frames[0] for _ in range(2*len_temporal-1 - ln)]
+			temp.extend(list_frames)
+			list_frames = copy.deepcopy(temp)
+			assert len(list_frames)==2*len_temporal-1
+			if ln<len_temporal:
+				list_frames = list_frames[len_temporal-ln:]
 
+		snippet = []
+		for i in range(len(list_frames)):
+			torch_img, img_size = torch_transform(os.path.join(path_indata, dname, 'images', list_frames[i]))
+
+			snippet.append(torch_img)
+			
+			if i >= len_temporal-1:
 				clip = torch.FloatTensor(torch.stack(snippet, dim=0)).unsqueeze(0)
 				clip = clip.permute((0,2,1,3,4))
 
-				process(model, clip, path_indata, dname, [list_frames[j], list_frames[j+len_temporal-1]], args, img_size)
-				arr.extend([list_frames[j], list_frames[j+len_temporal-1]])
+				process(model, clip, path_indata, dname, list_frames[i], args, img_size)
 
+				# process first (len_temporal-1) frames
+				if ln>=len_temporal:
+					if i < 2*len_temporal-2:
+						if flg or i-len_temporal+1 >= 2*len_temporal-1 - ln:
+							process(model, torch.flip(clip, [2]), path_indata, dname, list_frames[i-len_temporal+1], args, img_size)
 
-		for i in range(len(list_frames) - len(list_frames)%(2*len_temporal-2), len(list_frames)):
-			snippet = []
-			for j in range(i - len_temporal+1, i+1):
-				torch_img, img_size = torch_transform(os.path.join(path_indata, dname, 'images', list_frames[j]))
-				snippet.append(torch_img)
-			clip = torch.FloatTensor(torch.stack(snippet, dim=0)).unsqueeze(0)
-			clip = clip.permute((0,2,1,3,4))
-
-			process(model, clip, path_indata, dname, [list_frames[i-len_temporal+1], list_frames[i]], args, img_size)
-			arr.extend([list_frames[i-len_temporal+1], list_frames[i]])
-
-		arr = list(set(arr))
-		arr.sort()
-		# for i in range(len(arr)):
-		# 	if(arr[i]!=list_frames[i]):
-		# 		print(i, arr[i], frames[i])
-		# 		exit(0)
-		assert arr == list_frames, (len(arr), len(list_frames))
-
+				del snippet[0]
+		
 
 def torch_transform(path):
 	img_transform = transforms.Compose([
@@ -120,28 +129,27 @@ def blur(img):
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 	''' process one clip and save the predicted saliency map '''
 	with torch.no_grad():
-		smap = model(clip.to(device)).cpu()
-	# print(smap.size())
-	for i in range(len(frame_no)):
-		s_map = smap[:,i,:,:].squeeze(0).numpy()
-		s_map = cv2.resize(s_map, (img_size[1], img_size[0]))
-		s_map = blur(s_map)
+		smap = model(clip.to(device)).cpu().data[0]
+	
+	smap = smap.numpy()
+	smap = cv2.resize(smap, (img_size[1], img_size[0]))
+	smap = blur(smap)
 
-		img_save(s_map, join(args.save_path, dname, frame_no[i]), normalize=True)
+	img_save(smap, join(args.save_path, dname, frame_no), normalize=True)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--file_weight',default="./saved_models/2_frames_channel_trans.pt", type=str)
+	parser.add_argument('--file_weight',default="./saved_models/hollywood_single_more.pt", type=str)
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=32, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/2_frames_channel_trans', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/hollywood_single_more', type=str)
 	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
-	parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/val/', type=str)
-	parser.add_argument('--multi_frame',default=2, type=int)
+	parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/Hollywood/testing/', type=str)
+	parser.add_argument('--multi_frame',default=0, type=int)
 	parser.add_argument('--decoder_upsample',default=1, type=int)
-	parser.add_argument('--num_decoder_layers',default=3, type=int)
+	parser.add_argument('--num_decoder_layers',default=-1, type=int)
 
 	
 	args = parser.parse_args()
