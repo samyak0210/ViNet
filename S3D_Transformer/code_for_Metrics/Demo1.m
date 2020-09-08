@@ -26,14 +26,14 @@ Datasets{3} = 'DHF1K';
 Metrics{1} = 'CC'; 
 Metrics{2} = 'similarity'; 
 Metrics{3} = 'NSS';
-Metrics{4} = 'AUC_Judd';
-Metrics{5} = 'AUC_shuffled';
+% Metrics{4} = 'AUC_Judd';
+% Metrics{5} = 'AUC_shuffled';
 % disp(model_name);
 exitcode = 0;
 
 Results{1} = model_name;
 
-for i = 2:2 %length(Datasets)
+for i = 3:3 %length(Datasets)
     Datasets{i};
     for k =1: length(Results)
         % saliency prediction results

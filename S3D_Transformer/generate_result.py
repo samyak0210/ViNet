@@ -24,13 +24,14 @@ def validate(args):
     path_indata = args.path_indata
     file_weight = args.file_weight
 
-    len_temporal = 32
+    len_temporal = args.clip_size
 
     model = VideoSaliencyModel(
         transformer_in_channel=args.transformer_in_channel, 
         nhead=args.nhead,
         use_upsample=bool(args.decoder_upsample),
-        num_hier=args.num_hier
+        num_hier=args.num_hier,
+     	num_clips=args.clip_size   
     )
     # model = VideoSaliencyChannel(
     #     transformer_in_channel=args.transformer_in_channel, 
@@ -71,7 +72,7 @@ def validate(args):
         print ('processing ' + dname, flush=True)
         list_frames = [f for f in os.listdir(os.path.join(path_indata, dname, 'images')) if os.path.isfile(os.path.join(path_indata, dname, 'images', f))]
         list_frames.sort()
-        # os.makedirs(join(args.save_path, dname), exist_ok=True)
+        os.makedirs(join(args.save_path, dname), exist_ok=True)
 
         # process in a sliding window fashion
         if len(list_frames) >= 2*len_temporal-1:
@@ -117,31 +118,30 @@ def blur(img):
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
     ''' process one clip and save the predicted saliency map '''
-    import time
     with torch.no_grad():
-        tic=time.time()
         smap = model(clip.to(device)).cpu().data[0]
+    
     smap = smap.numpy()
-    smap = cv2.resize(smap, (img_size[1], img_size[0]))
+    smap = cv2.resize(smap, (img_size[0], img_size[1]))
     smap = blur(smap)
-    print(time.time()-tic)
-    exit(0)
+
     img_save(smap, join(args.save_path, dname, frame_no), normalize=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_weight',default="./saved_models/no_trans_upsampling_reduced.pt", type=str)
+    parser.add_argument('--file_weight',default="./saved_models/48_clip.pt", type=str)
     parser.add_argument('--nhead',default=4, type=int)
     parser.add_argument('--num_encoder_layers',default=3, type=int)
     parser.add_argument('--transformer_in_channel',default=32, type=int)
-    parser.add_argument('--save_path',default='/ssd_scratch/cvit/navyasri/Results/final_dhf1k_test', type=str)
+    parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/48_clip', type=str)
     parser.add_argument('--start_idx',default=-1, type=int)
     parser.add_argument('--num_parts',default=4, type=int)
-    parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/test/', type=str)
+    parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/val/', type=str)
     parser.add_argument('--multi_frame',default=0, type=int)
     parser.add_argument('--decoder_upsample',default=1, type=int)
     parser.add_argument('--num_decoder_layers',default=-1, type=int)
     parser.add_argument('--num_hier',default=3, type=int)
+    parser.add_argument('--clip_size',default=48, type=int)
     
     args = parser.parse_args()
     print(args)

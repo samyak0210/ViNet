@@ -132,7 +132,7 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 		smap = model(clip.to(device)).cpu().data[0]
 	
 	smap = smap.numpy()
-	smap = cv2.resize(smap, (img_size[1], img_size[0]))
+	smap = cv2.resize(smap, (img_size[0], img_size[1]))
 	smap = blur(smap)
 
 	img_save(smap, join(args.save_path, dname, frame_no), normalize=True)

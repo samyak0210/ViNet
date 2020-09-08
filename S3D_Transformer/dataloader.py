@@ -8,13 +8,13 @@ from torchvision import transforms, utils
 from PIL import Image
 
 class DHF1KMultiSave(Dataset):
-	def __init__(self, path_data, len_snippet, start_idx=-1):
+	def __init__(self, path_data, len_snippet, start_idx=-1, num_parts=4):
 		''' mode: train, val, save '''
 		self.path_data = path_data
 		list_indata = os.listdir(path_data)
-		if args.start_idx!=-1:
-			_len = (1.0/float(args.num_parts))*len(list_indata)
-			list_indata = list_indata[int((args.start_idx-1)*_len): int(args.start_idx*_len)]
+		if start_idx!=-1:
+			_len = (1.0/float(num_parts))*len(list_indata)
+			list_indata = list_indata[int((start_idx-1)*_len): int(start_idx*_len)]
 		self.len_snippet = len_snippet
 		self.img_transform = transforms.Compose([
 			transforms.Resize((224, 384)),
@@ -107,10 +107,9 @@ class Hollywood_UCFMultiSave(Dataset):
 		return clip_img, file_name, sz, list_clips[start_idx:start_idx+self.len_snippet]
 
 class DHF1KDataset(Dataset):
-	def __init__(self, path_data, len_snippet, out_clips=32, mode="train", multi_frame=0):
+	def __init__(self, path_data, len_snippet, mode="train", multi_frame=0):
 		''' mode: train, val, save '''
 		self.path_data = path_data
-		self.out_clips = out_clips
 		self.len_snippet = len_snippet
 		self.mode = mode
 		self.multi_frame = multi_frame

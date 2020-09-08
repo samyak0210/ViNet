@@ -25,11 +25,11 @@ def validateMulti(model, loader, epoch, device, args):
 	total_cc_loss = AverageMeter()
 	total_sim_loss = AverageMeter()
 	tic = time.time()
-	for (img_clips, gt_sal_clips, start_idxs, d_names) in tqdm(loader):
+	for (img_clips, start_idxs, d_names, sizes) in tqdm(loader):
 		img_clips = img_clips.to(device)
 		img_clips = img_clips.permute((0,2,1,3,4))
 		
-		pred_sal_clips = model(img_clips)
+		pred_sal_clips = model(img_clips, -1)
 		# continue
 		for i in range(pred_sal_clips.size(0)):
 			pred_sal_clip = pred_sal_clips[i]
@@ -39,12 +39,10 @@ def validateMulti(model, loader, epoch, device, args):
 			os.makedirs(join(args.save_path, dname), exist_ok=True)
 			for j in range(pred_sal_clip.size(0)):
 				pred_sal = pred_sal_clip[j].cpu().numpy()	
-				gt_sal = gt_sal_clips[i,j].numpy()
 
-				pred_sal = cv2.resize(pred_sal, (gt_sal.shape[1], gt_sal.shape[0]))
+				pred_sal = cv2.resize(pred_sal, (sizes[0], sizes[1]))
 				pred_sal = blur(pred_sal)
 
-				assert pred_sal.numpy().shape == gt_sal.shape
 				img_save(pred_sal, join(args.save_path, dname, '%04d.png'%(start_idx+j+1)), normalize=True)
 		
 			
@@ -65,16 +63,16 @@ def validate(args):
 	)
 
 	model.load_state_dict(torch.load(file_weight))
-	if torch.cuda.device_count() > 1:
-	    print("Let's use", torch.cuda.device_count(), "GPUs!")
-	    model.decoder = nn.DataParallel(model.decoder)
+	# if torch.cuda.device_count() > 1:
+	#     print("Let's use", torch.cuda.device_count(), "GPUs!")
+	#     model.decoder = nn.DataParallel(model.decoder)
 
 	model = model.to(device)
 	torch.backends.cudnn.benchmark = False
 	model.eval()
 
 	# iterate over the path_indata directory
-	val_dataset = DHF1KMultiSave(args.val_path_data, args.clip_size, mode="save")
+	val_dataset = DHF1KMultiSave(args.val_path_data, args.clip_size, start_idx=args.start_idx, num_parts=args.num_parts)
 	val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4*4)
 	with torch.no_grad():
 		validateMulti(model, val_loader, 0, device, args)
@@ -113,11 +111,12 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--file_weight',default="./saved_models/2_frames_channel_trans.pt", type=str)
+	parser.add_argument('--file_weight',default="./saved_models/new_train_multi_frame.pt", type=str)
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=32, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/2_frames_channel_trans', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/new_train_multi_frame_check', type=str)
+	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
 	parser.add_argument('--multi_frame',default=32, type=int)
 	parser.add_argument('--decoder_upsample',default=1, type=int)

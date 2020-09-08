@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from dataloader import * 
 from loss import *
 import cv2
-from model_hier import VideoSaliencyMultiModel, VideoSaliencyModel
+from model_hier import *
 from utils import *
 
 parser = argparse.ArgumentParser()
@@ -86,30 +86,9 @@ else:
         transformer_in_channel=args.transformer_in_channel, 
         nhead=args.nhead,
         use_upsample=bool(args.decoder_upsample),
-        num_hier=args.num_hier
+        num_hier=args.num_hier,
+        num_clips=args.clip_size
     )
-
-    ''' Channels as sequence '''
-    # model = VideoSaliencyChannel(
-    #     transformer_in_channel=args.transformer_in_channel, 
-    #     use_transformer=True, 
-    #     num_encoder_layers=args.num_encoder_layers, 
-    #     num_decoder_layers=args.num_decoder_layers, 
-    #     nhead=args.nhead,
-    #     multiFrame=args.multi_frame,
-    #     use_upsample=bool(args.decoder_upsample)
-    # )
-
-    ''' Channel Concat '''
-    # model = VideoSaliencyChannelConcat(
-    #     transformer_in_channel=args.transformer_in_channel, 
-    #     use_transformer=False,
-    #     num_encoder_layers=args.num_encoder_layers, 
-    #     num_decoder_layers=args.num_decoder_layers, 
-    #     nhead=args.nhead,
-    #     multiFrame=args.multi_frame,
-    # )
-
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -125,29 +104,8 @@ if args.dataset == "DHF1KDataset":
     val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
 else:
     train_dataset = Hollywood_UCFDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
-    print(len(train_dataset))
+    # print(len(train_dataset))
     val_dataset = Hollywood_UCFDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
-
-# if args.multi_frame:
-#     if args.dataset == "DHF1KDataset":
-#         train_dataset = DHF1KDatasetMultiFrame(args.train_path_data, args.clip_size, mode="train")
-#         val_dataset = DHF1KDatasetMultiFrame(args.val_path_data, args.clip_size, mode="val")
-#     elif args.dataset == "UCF":
-#         train_dataset = UCFMultiFrameDataset(args.train_path_data, args.clip_size, mode="train")
-#         val_dataset = UCFMultiFrameDataset(args.val_path_data, args.clip_size, mode="val")
-#     elif args.dataset == "Hollywood":
-#         train_dataset = HollywoodDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
-#         val_dataset = HollywoodDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
-# else:
-#     if args.dataset=="DHF1KDataset":
-#         train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
-#         val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
-#     elif args.dataset=="UCF":
-#         train_dataset = UCFDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
-#         val_dataset = UCFDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
-#     elif args.dataset=="Hollywood":
-#         train_dataset = HollywoodDataset(args.train_path_data, args.clip_size, mode="train", frame_no=args.frame_no)
-#         val_dataset = HollywoodDataset(args.val_path_data, args.clip_size, mode="val", frame_no=args.frame_no)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.no_workers)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.no_workers)
@@ -195,19 +153,8 @@ if torch.cuda.device_count() > 1:
 model.to(device)
 
 # parameter setting for fine-tuning
-if args.optim == "SGD":
-    params = []
-    for key, value in dict(model.named_parameters()).items():
-        if 'convtsp' in key:
-            params += [{'params':[value], 'key':key+'(new)'}]
-        else:
-            params += [{'params':[value], 'lr':0.001, 'key':key}]
-
-    optimizer = torch.optim.SGD(params, lr=0.1, momentum=0.9, weight_decay=2e-7)
-
-else:
-    params = list(filter(lambda p: p.requires_grad, model.parameters())) 
-    optimizer = torch.optim.Adam(params, lr=args.lr)
+params = list(filter(lambda p: p.requires_grad, model.parameters())) 
+optimizer = torch.optim.Adam(params, lr=args.lr)
 
 # if args.optim=="Adagrad":
 #     optimizer = torch.optim.Adagrad(params, lr=args.lr)
@@ -239,7 +186,7 @@ def train(model, optimizer, loader, epoch, device, args):
             pred_sal = pred_sal.squeeze(1)
             # print(pred_sal.shape, gt_sal.shape)
         else:
-            pred_sal = model(img_clips, -1)
+            pred_sal = model(img_clips)
         assert pred_sal.size() == gt_sal.size()
 
         loss = loss_func(pred_sal, gt_sal, args)
