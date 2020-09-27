@@ -65,6 +65,8 @@ parser.add_argument('--frame_no',default="last", type=str)
 parser.add_argument('--load_weight',default="None", type=str)
 parser.add_argument('--num_hier',default=3, type=int)
 parser.add_argument('--dataset',default="DHF1KDataset", type=str)
+parser.add_argument('--alternate',default=1, type=int)
+parser.add_argument('--spatial_dim',default=-1, type=int)
 
 args = parser.parse_args()
 print(args)
@@ -78,7 +80,8 @@ if args.multi_frame==32:
         num_encoder_layers=args.num_encoder_layers, 
     	num_decoder_layers=args.num_decoder_layers, 
     	nhead=args.nhead,
-        multiFrame=args.multi_frame
+        multiFrame=args.multi_frame,
+        spatial_dim=args.spatial_dim
     )
 else:
     ''' No transformer - S3D + ConvT + Up'''
@@ -93,15 +96,13 @@ else:
 np.random.seed(0)
 torch.manual_seed(0)
 
-print(model.decoder)
-
 # for (name, param) in model.named_parameters():
 #     if param.requires_grad:
 #         print(name, param.size())
 
 if args.dataset == "DHF1KDataset":
-    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
-    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame)
+    train_dataset = DHF1KDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame, alternate=args.alternate)
+    val_dataset = DHF1KDataset(args.val_path_data, args.clip_size, mode="val", multi_frame=args.multi_frame, alternate=args.alternate)
 else:
     train_dataset = Hollywood_UCFDataset(args.train_path_data, args.clip_size, mode="train", multi_frame=args.multi_frame)
     # print(len(train_dataset))

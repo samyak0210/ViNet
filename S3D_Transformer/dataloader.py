@@ -107,12 +107,13 @@ class Hollywood_UCFMultiSave(Dataset):
 		return clip_img, file_name, sz, list_clips[start_idx:start_idx+self.len_snippet]
 
 class DHF1KDataset(Dataset):
-	def __init__(self, path_data, len_snippet, mode="train", multi_frame=0):
+	def __init__(self, path_data, len_snippet, mode="train", multi_frame=0, alternate=1):
 		''' mode: train, val, save '''
 		self.path_data = path_data
 		self.len_snippet = len_snippet
 		self.mode = mode
 		self.multi_frame = multi_frame
+		self.alternate = alternate
 		self.img_transform = transforms.Compose([
 			transforms.Resize((224, 384)),
 			transforms.ToTensor(),
@@ -127,12 +128,12 @@ class DHF1KDataset(Dataset):
 		elif self.mode=="val":
 			self.list_num_frame = []
 			for v in os.listdir(path_data):
-				for i in range(0, len(os.listdir(os.path.join(path_data,v,'images')))-self.len_snippet, 2*self.len_snippet):
+				for i in range(0, len(os.listdir(os.path.join(path_data,v,'images')))-self.alternate * self.len_snippet, 2*self.len_snippet):
 					self.list_num_frame.append((v, i))
 		else:
 			self.list_num_frame = []
 			for v in os.listdir(path_data):
-				for i in range(0, len(os.listdir(os.path.join(path_data,v,'images')))-self.len_snippet, self.len_snippet):
+				for i in range(0, len(os.listdir(os.path.join(path_data,v,'images')))-self.alternate * self.len_snippet, self.len_snippet):
 					self.list_num_frame.append((v, i))
 				self.list_num_frame.append((v, len(os.listdir(os.path.join(path_data,v,'images')))-self.len_snippet))
 
@@ -143,7 +144,7 @@ class DHF1KDataset(Dataset):
 		# print(self.mode)
 		if self.mode == "train":
 			file_name = self.video_names[idx]
-			start_idx = np.random.randint(0, self.list_num_frame[idx]-self.len_snippet+1)
+			start_idx = np.random.randint(0, self.list_num_frame[idx]-self.alternate * self.len_snippet+1)
 		elif self.mode == "val" or self.mode=="save":
 			(file_name, start_idx) = self.list_num_frame[idx]
 
@@ -154,11 +155,11 @@ class DHF1KDataset(Dataset):
 		clip_gt = []
 		
 		for i in range(self.len_snippet):
-			img = Image.open(os.path.join(path_clip, '%04d.png'%(start_idx+i+1))).convert('RGB')
+			img = Image.open(os.path.join(path_clip, '%04d.png'%(start_idx+self.alternate*i+1))).convert('RGB')
 			sz = img.size
 
 			if self.mode!="save":
-				gt = np.array(Image.open(os.path.join(path_annt, '%04d.png'%(start_idx+i+1))).convert('L'))
+				gt = np.array(Image.open(os.path.join(path_annt, '%04d.png'%(start_idx+self.alternate*i+1))).convert('L'))
 				gt = gt.astype('float')
 				
 				if self.mode == "train":

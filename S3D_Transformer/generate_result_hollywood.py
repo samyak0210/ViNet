@@ -139,14 +139,14 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--file_weight',default="./saved_models/hollywood_single_more.pt", type=str)
+	parser.add_argument('--file_weight',default="./saved_models/ucf_single.pt", type=str)
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=32, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/hollywood_single_more', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/ucf_single1', type=str)
 	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
-	parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/Hollywood/testing/', type=str)
+	parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/UCF/testing/', type=str)
 	parser.add_argument('--multi_frame',default=0, type=int)
 	parser.add_argument('--decoder_upsample',default=1, type=int)
 	parser.add_argument('--num_decoder_layers',default=-1, type=int)

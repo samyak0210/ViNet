@@ -24,10 +24,16 @@ class PositionalEncoding(nn.Module):
 		return x
 
 class Transformer(nn.Module):
-	def __init__(self, feat_size, hidden_size=256, nhead=4, num_encoder_layers=3, max_len=4, num_decoder_layers=-1, num_queries=4):
+	def __init__(self, feat_size, hidden_size=256, nhead=4, num_encoder_layers=3, max_len=4, num_decoder_layers=-1, num_queries=4, spatial_dim=-1):
 		super(Transformer, self).__init__()
 		self.pos_encoder = PositionalEncoding(feat_size, max_len=max_len)
 		encoder_layers = nn.TransformerEncoderLayer(feat_size, nhead, hidden_size)
+		
+		self.spatial_dim = spatial_dim
+		if self.spatial_dim!=-1:
+			transformer_encoder_spatial_layers = nn.TransformerEncoderLayer(spatial_dim, nhead, hidden_size)
+			self.transformer_encoder_spatial = nn.TransformerEncoder(transformer_encoder_spatial_layers, num_encoder_layers)
+		
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_encoder_layers)
 		self.use_decoder = (num_decoder_layers != -1)
 		
@@ -41,6 +47,12 @@ class Transformer(nn.Module):
 		''' embeddings: CxBxCh*H*W '''
 		# print(embeddings.shape)
 		batch_size = embeddings.size(1)
+
+		if self.spatial_dim!=-1:
+			embeddings = embeddings.permute((2,1,0))
+			embeddings = self.transformer_encoder_spatial(embeddings)
+			embeddings = embeddings.permute((2,1,0))
+
 		x = self.pos_encoder(embeddings)
 		x = self.transformer_encoder(x)
 		if self.use_decoder:
@@ -61,7 +73,8 @@ class VideoSaliencyMultiModel(nn.Module):
 				num_encoder_layers=3, 
 				num_decoder_layers=3, 
 				nhead=4, 
-				multiFrame=32
+				multiFrame=32,
+				spatial_dim=-1
 			):
 		super(VideoSaliencyMultiModel, self).__init__()
 		
@@ -76,7 +89,8 @@ class VideoSaliencyMultiModel(nn.Module):
 									num_encoder_layers=num_encoder_layers,
 									num_decoder_layers=num_decoder_layers,
 									max_len=transformer_in_channel,
-									num_queries=multiFrame
+									num_queries=multiFrame,
+									spatial_dim=spatial_dim
 								)
 
 		self.backbone = BackBoneS3D()

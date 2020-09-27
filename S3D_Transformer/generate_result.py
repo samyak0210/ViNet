@@ -129,11 +129,11 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_weight',default="./saved_models/48_clip.pt", type=str)
+    parser.add_argument('--file_weight',default="./saved_models/no_trans_upsampling_reduced.pt", type=str)
     parser.add_argument('--nhead',default=4, type=int)
     parser.add_argument('--num_encoder_layers',default=3, type=int)
     parser.add_argument('--transformer_in_channel',default=32, type=int)
-    parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/48_clip', type=str)
+    parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/no_trans_upsampling_reduced', type=str)
     parser.add_argument('--start_idx',default=-1, type=int)
     parser.add_argument('--num_parts',default=4, type=int)
     parser.add_argument('--path_indata',default='/ssd_scratch/cvit/samyak/DHF1K/val/', type=str)
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     parser.add_argument('--decoder_upsample',default=1, type=int)
     parser.add_argument('--num_decoder_layers',default=-1, type=int)
     parser.add_argument('--num_hier',default=3, type=int)
-    parser.add_argument('--clip_size',default=48, type=int)
+    parser.add_argument('--clip_size',default=32, type=int)
     
     args = parser.parse_args()
     print(args)

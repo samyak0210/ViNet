@@ -4,7 +4,7 @@
 
 % load global parameters, you should set up the "ROOT_DIR" to your own path
 % for data.
-function exitcode = Demo1(model_name)
+function exitcode = Demo1(model_name, idx)
 
 % METRIC_DIR = 'code_forMetrics';
 % addpath(genpath(METRIC_DIR));
@@ -26,8 +26,8 @@ Datasets{3} = 'DHF1K';
 Metrics{1} = 'CC'; 
 Metrics{2} = 'similarity'; 
 Metrics{3} = 'NSS';
-% Metrics{4} = 'AUC_Judd';
-% Metrics{5} = 'AUC_shuffled';
+Metrics{4} = 'AUC_Judd';
+Metrics{5} = 'AUC_shuffled';
 % disp(model_name);
 exitcode = 0;
 
@@ -50,7 +50,7 @@ for i = 3:3 %length(Datasets)
         % // disp(options.IMG_DIR);
         % for j = 5:5 %length(Metrics)
             % if ~exist([CACHE Datasets{i} '_' Results{k} '_' Metrics{j} '.mat'], 'file')                 
-            [result, allMetric, ~] = eval1(options, Metrics);
+            [result, allMetric, ~] = eval1(options, Metrics, idx);
             for j=1:length(result)
                 fprintf('%s :%.4f \n', Metrics{j}, result(j));
             end

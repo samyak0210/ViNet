@@ -1,4 +1,4 @@
-function [ meanMetric, allMetrics, frames] = evaluationFunc( options, metrics )
+function [ meanMetric, allMetrics, frames] = evaluationFunc( options, metrics, idx)
 %EVALUATIONFUNC Evaluate result with the metric
 %   result: array of cells containing the predicted saliency map
 %   data: the ground truth data
@@ -30,10 +30,10 @@ postfix = '.png';
 % fh = str2func(metricName);
 
 %%
-frames = dir(fullfile([options.IMG_DIR '*' postfix]));
+% frames = dir(fullfile([options.IMG_DIR '*' postfix]));
+% disp(fullfile([options.IMG_DIR '*' postfix]));
 
-
-nframe = length(frames);
+% nframe = length(frames);
     
 %% we evaluate at most 50000 randomly selected frames in one dataset for efficiency
 % if nframe>5
@@ -41,13 +41,23 @@ nframe = length(frames);
 %    frames = frames(k(1:5));
 % end
 
+for x=601:700
+    temp = dir(fullfile(['/ssd_scratch/cvit/samyak/DHF1K/val/' strcat('0',int2str(x)) '/images/' '*' postfix]));
+%     disp(fullfile(fullfile(['/ssd_scratch/cvit/samyak/DHF1K/val/' strcat('0',int2str(x)) '/images/' '*' postfix])));
+    temp = temp(idx:32:length(temp))
+    if x==601
+        frames = temp;
+    else
+        frames = cat(1, frames, temp);
+    end
+end
 allMetrics = zeros(length(frames),length(metrics));
-for i = 1:length(frames)
 
+for i = 1:length(frames)
     gt_fold = frames(i).folder;
     gt_fold = strrep(gt_fold, '\','/');
     gt_name = frames(i).name;
-    
+%     continue;
     map_gt_path = strrep(gt_fold,'/images', '/maps/');
     fix_gt_path = strrep(gt_fold,'/images', '/fixation/maps/');
     map_eval_path = strrep(gt_fold, options.DS_GT_DIR, options.SALIENCY_DIR);
@@ -133,4 +143,6 @@ for j=1:length(metrics)
     meanMetric(j) = sm/cnt;
 end
 end
+
+
 
