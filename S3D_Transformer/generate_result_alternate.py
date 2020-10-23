@@ -40,11 +40,20 @@ def validateMulti(model, loader, epoch, device, args):
 			for j in range(pred_sal_clip.size(0)):
 				pred_sal = pred_sal_clip[j].cpu().numpy()	
 
+				if args.alternate!=1 and j>0:
+					pred_sal_middle = (pred_sal_clip[j-1].cpu().numpy() + pred_sal_clip[j].cpu().numpy())/2
+					pred_sal_middle = cv2.resize(pred_sal_middle, (sizes[0], sizes[1]))
+					pred_sal_middle = blur(pred_sal_middle)
+					img_save(pred_sal_middle, join(args.save_path, dname, '%04d.png'%(start_idx+args.alternate * j)), normalize=True)
+
 				pred_sal = cv2.resize(pred_sal, (sizes[0], sizes[1]))
 				pred_sal = blur(pred_sal)
 
-				img_save(pred_sal, join(args.save_path, dname, '%04d.png'%(start_idx+j+1)), normalize=True)
-		
+				
+
+				img_save(pred_sal, join(args.save_path, dname, '%04d.png'%(start_idx+args.alternate * j+1)), normalize=True)
+				if j==pred_sal_clip.size(0)-1:
+					img_save(pred_sal, join(args.save_path, dname, '%04d.png'%(start_idx+args.alternate * j+2)), normalize=True)
 			
 def validate(args):
 	''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
@@ -72,7 +81,7 @@ def validate(args):
 	model.eval()
 
 	# iterate over the path_indata directory
-	val_dataset = DHF1KMultiSave(args.val_path_data, args.clip_size, start_idx=args.start_idx, num_parts=args.num_parts)
+	val_dataset = DHF1KMultiSave(args.val_path_data, args.clip_size, start_idx=args.start_idx, num_parts=args.num_parts, alternate=args.alternate)
 	val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4*4)
 	with torch.no_grad():
 		validateMulti(model, val_loader, 0, device, args)
@@ -111,11 +120,11 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--file_weight',default="./saved_models/new_train_multi_frame.pt", type=str)
+	parser.add_argument('--file_weight',default="./saved_models/alternate_multi_frame.pt", type=str)
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=32, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/new_train_multi_frame_check', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/alternate', type=str)
 	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
 	parser.add_argument('--multi_frame',default=32, type=int)
@@ -124,6 +133,7 @@ if __name__ == '__main__':
 	parser.add_argument('--val_path_data',default="/ssd_scratch/cvit/samyak/DHF1K/val", type=str)
 	parser.add_argument('--clip_size',default=32, type=int)
 	parser.add_argument('--batch_size',default=1, type=int)
+	parser.add_argument('--alternate',default=2, type=int)
 
 	
 	args = parser.parse_args()

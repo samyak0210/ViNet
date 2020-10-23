@@ -35,7 +35,7 @@ def validateMulti(model, loader, epoch, device, args):
 			pred_sal_clip = pred_sal_clips[i]
 			start_idx = start_idxs[i]
 			dname = d_names[i]
-
+			print(dname)
 			os.makedirs(join(args.save_path, dname), exist_ok=True)
 			for j in range(pred_sal_clip.size(0)):
 				pred_sal = pred_sal_clip[j].cpu().numpy()	
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=32, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/new_train_multi_frame_check', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/check', type=str)
 	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
 	parser.add_argument('--multi_frame',default=32, type=int)

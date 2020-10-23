@@ -216,6 +216,66 @@ class VideoSaliencyModel(nn.Module):
 		if self.num_hier==3:
 			return self.decoder(y0, y1, y2, y3)
 
+class VideoAudioSaliencyModel(nn.Module):
+	def __init__(self, 
+				use_transformer=False,
+				transformer_in_channel=32,
+				num_encoder_layers=3,
+				nhead=4,
+				use_upsample=True,
+				num_hier=3,
+				num_clips=32
+			):
+		super(VideoAudioSaliencyModel, self).__init__()
+		self.use_transformer = use_transformer
+		self.visual_model = VideoSaliencyModel(
+				transformer_in_channel=transformer_in_channel,
+				nhead=nhead,
+				use_upsample=use_upsample,
+				num_hier=num_hier,
+				num_clips=num_clips
+		)
+
+		if self.use_transformer:
+			self.conv_in_1x1 = nn.Conv3d(in_channels=1024, out_channels=transformer_in_channel, kernel_size=1, stride=1, bias=True)
+			self.conv_out_1x1 = nn.Conv3d(in_channels=32, out_channels=1024, kernel_size=1, stride=1, bias=True)
+			self.transformer =  Transformer(
+									4*7*12, 
+									hidden_size=4*7*12, 
+									nhead=nhead,
+									num_encoder_layers=num_encoder_layers,
+									num_decoder_layers=-1,
+									max_len=transformer_in_channel,
+								)
+
+		self.audionet = SoundNet()
+		self.audionet.load_state_dict(torch.load('./soundnet8_final.pth'))
+		print("Loaded SoundNet Weights")
+		for param in self.audionet.parameters():
+			param.requires_grad = True
+
+		self.maxpool = nn.MaxPool3d((4,1,1),stride=(2,1,2),padding=(0,0,0))
+		self.bilinear = nn.Bilinear(42, 3, 4*7*12)
+
+	def forward(self, x, audio):
+		audio = self.audionet(audio)
+		[y0, y1, y2, y3] = self.visual_model.backbone(x)
+		y0 = self.maxpool(y0)
+		fused_out = self.bilinear(y0.flatten(2), audio.flatten(2))
+		fused_out = fused_out.view(fused_out.size(0), fused_out.size(1), 4, 7, 12)
+
+		if self.use_transformer:
+			fused_out = self.conv_in_1x1(fused_out)
+			fused_out = fused_out.flatten(2)
+			fused_out = fused_out.permute((1,0,2))
+			# print("fused_out", fused_out.shape)
+			fused_out = self.transformer(fused_out, -1)
+			fused_out = fused_out.permute((1,0,2))
+			fused_out = fused_out.view(fused_out.size(0), fused_out.size(1), 4, 7, 12)
+			fused_out = self.conv_out_1x1(fused_out)
+
+		return self.visual_model.decoder(fused_out, y1, y2, y3)
+
 class DecoderConvUp(nn.Module):
 	def __init__(self):
 		super(DecoderConvUp, self).__init__()
@@ -710,6 +770,87 @@ class BackBoneS3D(nn.Module):
 
 		return [y0, y1, y2, y3]
 
+
+class SoundNet(nn.Module):
+    def __init__(self):
+        super(SoundNet, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=(64, 1), stride=(2, 1),
+                               padding=(32, 0))
+        self.batchnorm1 = nn.BatchNorm2d(16, eps=1e-5, momentum=0.1)
+        self.relu1 = nn.ReLU(True)
+        self.maxpool1 = nn.MaxPool2d((8, 1), stride=(8, 1))
+
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=(32, 1), stride=(2, 1),
+                               padding=(16, 0))
+        self.batchnorm2 = nn.BatchNorm2d(32, eps=1e-5, momentum=0.1)
+        self.relu2 = nn.ReLU(True)
+        self.maxpool2 = nn.MaxPool2d((8, 1), stride=(8, 1))
+
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=(16, 1), stride=(2, 1),
+                               padding=(8, 0))
+        self.batchnorm3 = nn.BatchNorm2d(64, eps=1e-5, momentum=0.1)
+        self.relu3 = nn.ReLU(True)
+
+        self.conv4 = nn.Conv2d(64, 128, kernel_size=(8, 1), stride=(2, 1),
+                               padding=(4, 0))
+        self.batchnorm4 = nn.BatchNorm2d(128, eps=1e-5, momentum=0.1)
+        self.relu4 = nn.ReLU(True)
+
+        self.conv5 = nn.Conv2d(128, 256, kernel_size=(4, 1), stride=(2, 1),
+                               padding=(2, 0))
+        self.batchnorm5 = nn.BatchNorm2d(256, eps=1e-5, momentum=0.1)
+        self.relu5 = nn.ReLU(True)
+        self.maxpool5 = nn.MaxPool2d((4, 1), stride=(4, 1))
+
+        self.conv6 = nn.Conv2d(256, 512, kernel_size=(4, 1), stride=(2, 1),
+                               padding=(2, 0))
+        self.batchnorm6 = nn.BatchNorm2d(512, eps=1e-5, momentum=0.1)
+        self.relu6 = nn.ReLU(True)
+
+        self.conv7 = nn.Conv2d(512, 1024, kernel_size=(4, 1), stride=(2, 1),
+                               padding=(2, 0))
+        self.batchnorm7 = nn.BatchNorm2d(1024, eps=1e-5, momentum=0.1)
+        self.relu7 = nn.ReLU(True)
+
+        self.conv8_objs = nn.Conv2d(1024, 1000, kernel_size=(8, 1),
+                                    stride=(2, 1))
+        self.conv8_scns = nn.Conv2d(1024, 401, kernel_size=(8, 1),
+                                    stride=(2, 1))
+
+    def forward(self, waveform):
+        x = self.conv1(waveform)
+        x = self.batchnorm1(x)
+        x = self.relu1(x)
+        x = self.maxpool1(x)
+
+        x = self.conv2(x)
+        x = self.batchnorm2(x)
+        x = self.relu2(x)
+        x = self.maxpool2(x)
+
+        x = self.conv3(x)
+        x = self.batchnorm3(x)
+        x = self.relu3(x)
+
+        x = self.conv4(x)
+        x = self.batchnorm4(x)
+        x = self.relu4(x)
+
+        x = self.conv5(x)
+        x = self.batchnorm5(x)
+        x = self.relu5(x)
+        x = self.maxpool5(x)
+
+        x = self.conv6(x)
+        x = self.batchnorm6(x)
+        x = self.relu6(x)
+
+        x = self.conv7(x)
+        x = self.batchnorm7(x)
+        x = self.relu7(x)
+
+        return x
 
 # class DecoderConvUp8Frame(nn.Module):
 # 	def __init__(self):

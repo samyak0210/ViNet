@@ -11,6 +11,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal as Norm
 import cv2
 
 def kldiv(s_map, gt):
+    assert s_map.size() == gt.size()
     batch_size = s_map.size(0)
     w = s_map.size(1)
     h = s_map.size(2)
@@ -77,6 +78,7 @@ def similarity(s_map, gt):
     return torch.mean(torch.sum(torch.min(s_map, gt), 1))
 
 def cc(s_map, gt):
+    assert s_map.size() == gt.size()
     batch_size = s_map.size(0)
     w = s_map.size(1)
     h = s_map.size(2)
