@@ -248,52 +248,6 @@ class VideoAudioSaliencyModel(nn.Module):
 
 		return self.visual_model.decoder(fused_out, y1, y2, y3)
 
-class VideoAudioSaliencyFusionVoxModel(nn.Module):
-	def __init__(self, 
-				use_transformer=False,
-				transformer_in_channel=32,
-				num_encoder_layers=3,
-				nhead=4,
-				use_upsample=True,
-				num_hier=3,
-				num_clips=32,
-			):
-		super(VideoAudioSaliencyFusionVoxModel, self).__init__()
-		self.visual_model = VideoSaliencyModel(
-				transformer_in_channel=transformer_in_channel,
-				nhead=nhead,
-				use_upsample=use_upsample,
-				num_hier=num_hier,
-				num_clips=num_clips
-		)
-
-		self.audionet = VGGM()
-		self.audionet.load_state_dict(torch.load('./VGGM300_BEST_140_81.99.pth'))
-		print("Loaded VGGVOX Weights")
-		for param in self.audionet.parameters():
-			param.requires_grad = True
-
-		# self.maxpool = nn.MaxPool3d((4,1,1),stride=(2,1,2),padding=(0,0,0))
-		self.conv_audio = nn.Conv2d(4096, 512, kernel_size=1, stride=1)
-		self.conv_video = nn.Conv3d(1024, 512, kernel_size=1, stride=1)
-		# self.bilinear = nn.Bilinear(42, 3, 4*7*12)
-
-	def forward(self, x, audio):
-		audio = self.audionet(audio)
-		audio = self.conv_audio(audio)
-		audio = audio.unsqueeze(-1).repeat((1,1,4,7,12))
-
-		[y0, y1, y2, y3] = self.visual_model.backbone(x) # 1024, 4, 7, 12
-
-		y0 = self.conv_video(y0)
-
-		fused_out = torch.cat((y0, audio), 1)
-		# fused_out = self.fusion_block([y0.flatten(1), audio.flatten(1)])
-		# fused_out = fused_out.view(fused_out.size(0), 1024, 4, 7, 12)
-		# fused_out = self.conv_out(fused_out)
-
-		return self.visual_model.decoder(fused_out, y1, y2, y3)
-
 class DecoderConvUp(nn.Module):
 	def __init__(self):
 		super(DecoderConvUp, self).__init__()

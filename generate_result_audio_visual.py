@@ -117,47 +117,6 @@ def get_audio_feature(audioind, audiodata, args, start_idx):
 	audio_feature = audioexcer.view(1, 1,-1,1)
 	return audio_feature
 
-def get_audio_feature_vox(audioind, audiodata, clip_size, start_idx, flip=False):
-	len_snippet = args.clip_size
-	# max_audio_Fs = 22050
-	# min_video_fps = 10
-	max_audio_win = 48320
-
-	audio_feature  = torch.zeros(max_audio_win)
-	# valid = {}
-	# valid['audio']=0
-
-	if audioind in audiodata:
-
-		excerptstart = audiodata[audioind]['starts'][start_idx+1]
-		if start_idx+len_snippet >= len(audiodata[audioind]['ends']):
-			print("Exceeds size", audioind)
-			sys.stdout.flush()
-			excerptend = audiodata[audioind]['ends'][-1]
-		else:
-			excerptend = audiodata[audioind]['ends'][start_idx+len_snippet]	
-		# try:
-		# 	valid['audio'] = audiodata[audioind]['wav'][:, excerptstart:excerptend+1].shape[1]
-		# except:
-		# 	pass
-		if flip:
-			audio_feature_tmp = audiodata[audioind]['wav'][:, excerptstart:excerptend+1]
-			# print(audio_feature_tmp.shape)
-			audio_feature_tmp = torch.flip(audio_feature_tmp, [1])
-		else:
-			audio_feature_tmp = audiodata[audioind]['wav'][:, excerptstart:excerptend+1]
-
-		if audio_feature_tmp.shape[1]<=audio_feature.shape[0]:
-			audio_feature[:audio_feature_tmp.shape[1]] = audio_feature_tmp
-		else:
-			print("Audio Length Bigger")
-			audio_feature = audio_feature_tmp[0,:].copy()
-	# print(audio_feature.shape)
-	audio_feature = preprocess(audio_feature).astype(np.float32)
-	assert audio_feature.shape == (512,300), audio_feature.shape
-	audio_feature=np.expand_dims(audio_feature, 2)
-	return transforms.ToTensor()(audio_feature).unsqueeze(0)
-
 def validate(args):
 	''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
 	# optional two command-line arguments
@@ -182,24 +141,6 @@ def validate(args):
 			num_hier=args.num_hier,
 			num_clips=args.clip_size   
 		)
-	# model = VideoSaliencyChannel(
-	#     transformer_in_channel=args.transformer_in_channel, 
-	#     use_transformer=True, 
-	#     num_encoder_layers=args.num_encoder_layers, 
-	#     num_decoder_layers=args.num_decoder_layers, 
-	#     nhead=args.nhead,
-	#     multiFrame=args.multi_frame,
-	#     use_upsample=bool(args.decoder_upsample)
-	# )
-	# model = VideoSaliencyChannelConcat(
-	#     transformer_in_channel=args.transformer_in_channel, 
-	#     use_transformer=False,
-	#     num_encoder_layers=args.num_encoder_layers, 
-	#     num_decoder_layers=args.num_decoder_layers, 
-	#     nhead=args.nhead,
-	#     multiFrame=args.multi_frame,
-	# )
-	# mode = VideoSaliencyChannelConcat
 
 	model.load_state_dict(torch.load(file_weight))
 
