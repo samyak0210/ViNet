@@ -3,7 +3,7 @@ import os
 import numpy as np
 import cv2
 import torch
-from model_hier import *
+from model import *
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
 import argparse
@@ -21,16 +21,6 @@ import json
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-
-# def read_sal_text(txt_file):
-# 	test_list = {'names': [], 'nframes': [], 'fps': []}
-# 	with open(txt_file,'r') as f:
-# 		for line in f:
-# 			word=line.strip().split()
-# 			test_list['names'].append(word[0])
-# 			test_list['nframes'].append(word[1])
-# 			test_list['fps'].append(word[2])
-# 	return test_list
 
 def read_sal_text_dave(json_file):
 	test_list = {'names': [], 'nframes': [], 'fps': []}
@@ -156,24 +146,6 @@ def validate(args):
 			num_hier=args.num_hier,
 			num_clips=args.clip_size   
 		)
-	# model = VideoSaliencyChannel(
-	#     transformer_in_channel=args.transformer_in_channel, 
-	#     use_transformer=True, 
-	#     num_encoder_layers=args.num_encoder_layers, 
-	#     num_decoder_layers=args.num_decoder_layers, 
-	#     nhead=args.nhead,
-	#     multiFrame=args.multi_frame,
-	#     use_upsample=bool(args.decoder_upsample)
-	# )
-	# model = VideoSaliencyChannelConcat(
-	#     transformer_in_channel=args.transformer_in_channel, 
-	#     use_transformer=False,
-	#     num_encoder_layers=args.num_encoder_layers, 
-	#     num_decoder_layers=args.num_decoder_layers, 
-	#     nhead=args.nhead,
-	#     multiFrame=args.multi_frame,
-	# )
-	# mode = VideoSaliencyChannelConcat
 
 	model.load_state_dict(torch.load(file_weight))
 
@@ -181,7 +153,6 @@ def validate(args):
 	torch.backends.cudnn.benchmark = False
 	model.eval()
 
-	# iterate over the path_indata directory
 	list_indata = []
 	if args.dataset=='DIEM':
 		file_name = 'DIEM_list_test_fps.txt'
@@ -209,8 +180,6 @@ def validate(args):
 		_len = (1.0/float(args.num_parts))*len(list_indata)
 		list_indata = list_indata[int((args.start_idx-1)*_len): int(args.start_idx*_len)]
 
-	# os.system('mkdir -p '+args.save_path)
-	# list_indata = ['clip9']
 	for dname in list_indata:
 		print ('processing ' + dname, flush=True)
 		list_frames = [f for f in os.listdir(os.path.join(path_indata, 'video_frames', args.dataset, dname)) if os.path.isfile(os.path.join(path_indata, 'video_frames', args.dataset, dname, f))]        
@@ -282,7 +251,7 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size, audio_fe
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--file_weight',default="./saved_models/no_trans_upsampling_reduced.pt", type=str)
+	parser.add_argument('--file_weight',default="./saved_models/AViNet_Dave.pt", type=str)
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=512, type=int)

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import cv2
 import torch
-from model_hier import VideoSaliencyModel
+from model import VideoSaliencyModel
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
 import argparse
@@ -33,24 +33,6 @@ def validate(args):
         num_hier=args.num_hier,
      	num_clips=args.clip_size   
     )
-    # model = VideoSaliencyChannel(
-    #     transformer_in_channel=args.transformer_in_channel, 
-    #     use_transformer=True, 
-    #     num_encoder_layers=args.num_encoder_layers, 
-    #     num_decoder_layers=args.num_decoder_layers, 
-    #     nhead=args.nhead,
-    #     multiFrame=args.multi_frame,
-    #     use_upsample=bool(args.decoder_upsample)
-    # )
-    # model = VideoSaliencyChannelConcat(
-    #     transformer_in_channel=args.transformer_in_channel, 
-    #     use_transformer=False,
-    #     num_encoder_layers=args.num_encoder_layers, 
-    #     num_decoder_layers=args.num_decoder_layers, 
-    #     nhead=args.nhead,
-    #     multiFrame=args.multi_frame,
-    # )
-    # mode = VideoSaliencyChannelConcat
 
     model.load_state_dict(torch.load(file_weight))
 
@@ -58,15 +40,12 @@ def validate(args):
     torch.backends.cudnn.benchmark = False
     model.eval()
 
-    # iterate over the path_indata directory
     list_indata = [d for d in os.listdir(path_indata) if os.path.isdir(os.path.join(path_indata, d))]
     list_indata.sort()
 
     if args.start_idx!=-1:
         _len = (1.0/float(args.num_parts))*len(list_indata)
         list_indata = list_indata[int((args.start_idx-1)*_len): int(args.start_idx*_len)]
-
-    # os.system('mkdir -p '+args.save_path)
 
     for dname in list_indata:
         print ('processing ' + dname, flush=True)
@@ -129,7 +108,7 @@ def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_weight',default="./saved_models/no_trans_upsampling_reduced.pt", type=str)
+    parser.add_argument('--file_weight',default="./saved_models/ViNet_DHF1K.pt", type=str)
     parser.add_argument('--nhead',default=4, type=int)
     parser.add_argument('--num_encoder_layers',default=3, type=int)
     parser.add_argument('--transformer_in_channel',default=32, type=int)

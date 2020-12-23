@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from dataloader import * 
 from loss import *
 import cv2
-from model_hier import *
+from model import *
 from utils import *
 
 parser = argparse.ArgumentParser()

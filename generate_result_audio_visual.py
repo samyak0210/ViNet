@@ -3,7 +3,7 @@ import os
 import numpy as np
 import cv2
 import torch
-from model_hier import *
+from model import *
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
 import argparse
