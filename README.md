@@ -123,7 +123,7 @@ You can select the corresponding fusion technique's model from the model.py file
 ## Quantitative Results
 
 * ### DHF1K
-The results of our models on SALICON test dataset can be viewed [here](https://mmcheng.net/videosal/) under the name ViNet. Comparison with other state-of-the-art saliency detection models 
+The results of our models on DHF1K test dataset can be viewed [here](https://mmcheng.net/videosal/) under the name ViNet. Comparison with other state-of-the-art saliency detection models 
 ![](./extras/DHF1K.png)
 
 ## Contact 

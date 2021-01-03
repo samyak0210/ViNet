@@ -28,12 +28,12 @@ Metrics{2} = 'similarity';
 Metrics{3} = 'NSS';
 Metrics{4} = 'AUC_Judd';
 Metrics{5} = 'AUC_shuffled';
-% disp(model_name);
+disp(model_name);
 exitcode = 0;
 
 Results{1} = model_name;
 
-for i = 3:3 %length(Datasets)
+for i = 1:1 %length(Datasets)
     Datasets{i};
     for k =1: length(Results)
         % saliency prediction results

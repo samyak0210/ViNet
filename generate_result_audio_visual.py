@@ -9,14 +9,12 @@ from loss import kldiv, cc, nss
 import argparse
 
 from torch.utils.data import DataLoader
-from dataloader import DHF1KDataset
 from utils import *
 import time
 from tqdm import tqdm
 from torchvision import transforms, utils
 from os.path import join
 import torchaudio
-from signal_utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -250,7 +248,7 @@ if __name__ == '__main__':
 	parser.add_argument('--nhead',default=4, type=int)
 	parser.add_argument('--num_encoder_layers',default=3, type=int)
 	parser.add_argument('--transformer_in_channel',default=512, type=int)
-	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/diem_test', type=str)
+	parser.add_argument('--save_path',default='/ssd_scratch/cvit/samyak/Results/AViNet_Diem', type=str)
 	parser.add_argument('--start_idx',default=-1, type=int)
 	parser.add_argument('--num_parts',default=4, type=int)
 	parser.add_argument('--split',default=1, type=int)
