@@ -2,6 +2,8 @@
 
 This repository contains Pytorch Implementation of ViNet and AViNet.
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/avinet-diving-deep-into-audio-visual-saliency/video-saliency-detection-on-dhf1k)](https://paperswithcode.com/sota/video-saliency-detection-on-dhf1k?p=avinet-diving-deep-into-audio-visual-saliency)
+
 ## Cite
 Please cite with the following Bibtex code:
 ```
