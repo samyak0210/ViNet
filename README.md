@@ -7,11 +7,13 @@ This repository contains Pytorch Implementation of ViNet and AViNet.
 ## Cite
 Please cite with the following Bibtex code:
 ```
-@article{jain2020avinet,
-  title={AViNet: Diving Deep into Audio-Visual Saliency Prediction},
-  author={Jain, Samyak and Yarlagadda, Pradeep and Subramanian, Ramanathan and Gandhi, Vineet},
-  journal={arXiv preprint arXiv:2012.06170},
-  year={2020}
+@misc{jain2021vinet,
+      title={ViNet: Pushing the limits of Visual Modality for Audio-Visual Saliency Prediction}, 
+      author={Samyak Jain and Pradeep Yarlagadda and Shreyank Jyoti and Shyamgopal Karthik and Ramanathan Subramanian and Vineet Gandhi},
+      year={2021},
+      eprint={2012.06170},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
 }
 ```
 ## Abstract
