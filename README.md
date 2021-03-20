@@ -1,4 +1,4 @@
-# AViNet: Diving Deep into Audio-Visual Saliency Prediction
+# ViNet: Pushing the limits of Visual Modality for Audio-Visual Saliency Prediction
 
 This repository contains Pytorch Implementation of ViNet and AViNet.
 
@@ -18,14 +18,7 @@ Please cite with the following Bibtex code:
 ```
 ## Abstract
 
-We propose the AViNet architecture for audiovisual
-saliency prediction. AViNet is a fully convolutional encoderdecoder architecture. The encoder combines visual features learned for action recognition, with audio embeddings learned via an aural network designed to classify
-objects and scenes. The decoder infers a saliency map
-via trilinear interpolation and 3D convolutions, combining hierarchical features. The overall architecture is conceptually simple, causal, and runs in real-time (60 fps).
-AViNet outperforms the state-of-the-art on ten (seven audiovisual and three visual-only) datasets, while surpassing human performance on the CC, SIM and AUC metrics for the AVE dataset. Visual features maximally account
-for saliency on existing datasets with audio only contributing to minor gains, except in specific contexts like social
-events. Our work therefore motivates the need to curate
-saliency datasets reflective of real-life, where both the visual and aural modalities complimentarily drive saliency
+We propose the ViNet architecture for audio-visual saliency prediction. ViNet is a fully convolutional encoder-decoder architecture. The encoder uses visual features from a network trained for action recognition, and the decoder infers a saliency map via trilinear interpolation and 3D convolutions, combining features from multiple hierarchies. The overall architecture of ViNet is conceptually simple; it is causal and runs in real-time (60 fps). ViNet does not use audio as input and still outperforms the state-of-the-art audio-visual saliency prediction models on nine different datasets (three visual-only and six audio-visual datasets). ViNet also surpasses human performance on the CC, SIM and AUC metrics for the AVE dataset, and to our knowledge, it is the first network to do so. We also explore a variation of ViNet architecture by augmenting audio features into the decoder. To our surprise, upon sufficient training, the network becomes agnostic to the input audio and provides the same output irrespective of the input. Interestingly, we also observe similar behaviour in the previous state-of-the-art models \cite{tsiami2020stavis} for audio-visual saliency prediction. Our findings contrast with previous works on deep learning-based audio-visual saliency prediction, suggesting a clear avenue for future explorations incorporating audio in a more effective manner.
 
 ## Examples
 We compare our model ViNet with UNISAL (previous state-of-the-art). Below are some examples of our model. The first section is original video, second is the ground-truth, third is our model's prediction and last is the UNISAL's prediction.
