@@ -47,7 +47,6 @@ def make_dataset(root, video_names, audio_path, video_fps):
 		downsample_resample = torchaudio.transforms.Resample(
     		Fs, downsample_rate, resampling_method='sinc_interpolation')
 		audiowav = downsample_resample(audiowav)
-		# print(Fs, audiowav.shape, audiowav)
 		audiowav = audiowav * (2 ** -23)
 		
 		n_samples = Fs/float(video_fps[video_names[i]])
@@ -109,8 +108,6 @@ def get_audio_feature(audioind, audiodata, args, start_idx):
 
 
 def validate(args):
-	''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
-	# optional two command-line arguments
 	path_indata = args.path_indata
 	file_weight = args.file_weight
 
@@ -140,7 +137,6 @@ def validate(args):
 	torch.backends.cudnn.benchmark = False
 	model.eval()
 
-	# iterate over the path_indata directory
 	list_indata = []
 	
 
@@ -162,15 +158,12 @@ def validate(args):
 		_len = (1.0/float(args.num_parts))*len(list_indata)
 		list_indata = list_indata[int((args.start_idx-1)*_len): int(args.start_idx*_len)]
 
-	# os.system('mkdir -p '+args.save_path)
-	# list_indata = ['clip9']
 	for dname in list_indata:
 		print ('processing ' + dname, flush=True)
 		list_frames = [f for f in os.listdir(os.path.join(path_indata, 'video_frames', dname)) if os.path.isfile(os.path.join(path_indata, 'video_frames', dname, f))]        
 		list_frames.sort()
 		os.makedirs(join(args.save_path, dname), exist_ok=True)
 
-		# process in a sliding window fashion
 		if len(list_frames) >= 2*len_temporal-1:
 
 			snippet = []
@@ -188,10 +181,8 @@ def validate(args):
 						audio_feature = get_audio_feature(dname, audiodata, args, i-len_temporal+1)
 					process(model, clip, path_indata, dname, list_frames[i], args, img_size, audio_feature=audio_feature)
 
-					# process first (len_temporal-1) frames
 					if i < 2*len_temporal-2:
 						if args.use_sound:
-							# print(audio_feature.size())
 							audio_feature = torch.flip(audio_feature, [2])
 						process(model, torch.flip(clip, [2]), path_indata, dname, list_frames[i-len_temporal+1], args, img_size, audio_feature=audio_feature)
 
@@ -219,7 +210,6 @@ def blur(img):
 	return torch.FloatTensor(bl)
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size, audio_feature=None):
-	''' process one clip and save the predicted saliency map '''
 	with torch.no_grad():
 		if audio_feature==None:
 			smap = model(clip.to(device)).cpu().data[0]

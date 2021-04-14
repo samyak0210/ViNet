@@ -19,8 +19,6 @@ from os.path import join
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 def validate(args):
-    ''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
-    # optional two command-line arguments
     path_indata = args.path_indata
     file_weight = args.file_weight
 
@@ -96,7 +94,6 @@ def blur(img):
     return torch.FloatTensor(bl)
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
-    ''' process one clip and save the predicted saliency map '''
     with torch.no_grad():
         smap = model(clip.to(device)).cpu().data[0]
     

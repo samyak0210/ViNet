@@ -1,9 +1,3 @@
-''' Change in fold_lists in line 159
-	Change in train.py mode=test -> val
-	Change in make_dataset line 42
-	Change in line 189 json_file
-'''
-
 import os
 from os.path import join
 import csv
@@ -15,7 +9,6 @@ from torchvision import transforms, utils
 from PIL import Image
 import torchaudio
 import sys
-from signal_utils import *
 from scipy.io import wavfile
 import json
 

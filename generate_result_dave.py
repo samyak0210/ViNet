@@ -26,7 +26,6 @@ def read_sal_text_dave(json_file):
 	with open(json_file,'r') as f:
 		_dic = json.load(f)
 		for name in _dic:
-			# word=line.strip().split()
 			test_list['names'].append(name)
 			test_list['nframes'].append(0)
 			test_list['fps'].append(float(_dic[name]))
@@ -122,8 +121,6 @@ def get_audio_feature(audioind, audiodata, args, start_idx):
 	return audio_feature
 
 def validate(args):
-	''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
-	# optional two command-line arguments
 	path_indata = args.path_indata
 	file_weight = args.file_weight
 
@@ -185,7 +182,6 @@ def validate(args):
 		list_frames.sort()
 		os.makedirs(join(args.save_path, dname), exist_ok=True)
 
-		# process in a sliding window fashion
 		if len(list_frames) >= 2*len_temporal-1:
 
 			snippet = []
@@ -203,12 +199,9 @@ def validate(args):
 						audio_feature = get_audio_feature(dname, audiodata, args, i-len_temporal+1)
 					process(model, clip, path_indata, dname, list_frames[i], args, img_size, audio_feature=audio_feature)
 
-					# process first (len_temporal-1) frames
 					if i < 2*len_temporal-2:
 						if args.use_sound:
-							# print(audio_feature.size())
 							audio_feature = torch.flip(audio_feature, [2])
-							# audio_feature = get_audio_feature_vox(dname, audiodata, args, i-len_temporal+1, flip=True)
 						process(model, torch.flip(clip, [2]), path_indata, dname, list_frames[i-len_temporal+1], args, img_size, audio_feature=audio_feature)
 
 					del snippet[0]
@@ -235,7 +228,6 @@ def blur(img):
 	return torch.FloatTensor(bl)
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size, audio_feature=None):
-	''' process one clip and save the predicted saliency map '''
 	with torch.no_grad():
 		if audio_feature is None:
 			smap = model(clip.to(device)).cpu().data[0]

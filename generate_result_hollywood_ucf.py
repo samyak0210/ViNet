@@ -17,7 +17,6 @@ from os.path import join
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def validate(args):
-	''' read frames in path_indata and generate frame-wise saliency maps in path_output '''
 	path_indata = args.path_indata
 	file_weight = args.file_weight
 
@@ -35,7 +34,6 @@ def validate(args):
 	torch.backends.cudnn.benchmark = False
 	model.eval()
 
-	# iterate over the path_indata directory
 	list_indata = [d for d in os.listdir(path_indata) if os.path.isdir(os.path.join(path_indata, d))]
 	list_indata.sort()
 
@@ -51,7 +49,6 @@ def validate(args):
 
 		os.makedirs(join(args.save_path, dname), exist_ok=True)
 
-		# process in a sliding window fashion
 		idx = 0
 		ln = len(list_frames)
 		flg = 1
@@ -76,7 +73,6 @@ def validate(args):
 
 				process(model, clip, path_indata, dname, list_frames[i], args, img_size)
 
-				# process first (len_temporal-1) frames
 				if ln>=len_temporal:
 					if i < 2*len_temporal-2:
 						if flg or i-len_temporal+1 >= 2*len_temporal-1 - ln:
@@ -105,7 +101,6 @@ def blur(img):
 	return torch.FloatTensor(bl)
 
 def process(model, clip, path_inpdata, dname, frame_no, args, img_size):
-	''' process one clip and save the predicted saliency map '''
 	with torch.no_grad():
 		smap = model(clip.to(device)).cpu().data[0]
 	
