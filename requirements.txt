@@ -103,7 +103,7 @@ pbr==5.1.3
 pep8==1.7.0
 pexpect==4.0.1
 pickleshare==0.7.5
-Pillow==5.2.0
+Pillow==8.2.0
 plainbox==0.25
 plotly==4.12.0
 pretrainedmodels==0.7.4
