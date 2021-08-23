@@ -86,7 +86,7 @@ nbconvert==5.4.0
 nbformat==4.4.0
 networkx==2.4
 nltk==3.3
-notebook==5.7.0
+notebook==6.4.1
 numba==0.45.1
 numpy==1.18.5
 nvidia-ml-py3==7.352.0
