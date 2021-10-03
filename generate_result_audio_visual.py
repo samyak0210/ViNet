@@ -135,7 +135,7 @@ def validate(args):
 			num_clips=args.clip_size   
 		)
 
-	model.load_state_dict(torch.load(file_weight))
+	model.load_state_dict(torch.load(file_weight, map_location=torch.device(device)))
 
 	model = model.to(device)
 	torch.backends.cudnn.benchmark = False
