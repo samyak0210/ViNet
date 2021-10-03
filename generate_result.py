@@ -3,6 +3,7 @@ import os
 import numpy as np
 import cv2
 import torch
+from torch.types import Device
 from model import VideoSaliencyModel
 from scipy.ndimage.filters import gaussian_filter
 from loss import kldiv, cc, nss
@@ -32,7 +33,7 @@ def validate(args):
      	num_clips=args.clip_size   
     )
 
-    model.load_state_dict(torch.load(file_weight))
+    model.load_state_dict(torch.load(file_weight, map_location=torch.device(device)))
 
     model = model.to(device)
     torch.backends.cudnn.benchmark = False
