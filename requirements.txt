@@ -88,7 +88,7 @@ networkx==2.4
 nltk==3.3
 notebook==5.7.0
 numba==0.45.1
-numpy==1.18.5
+numpy==1.22.0
 nvidia-ml-py3==7.352.0
 oauthlib==1.0.3
 onboard==1.2.0
