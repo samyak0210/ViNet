@@ -76,7 +76,7 @@ Markdown==3.1
 MarkupSafe==0.23
 matplotlib==3.0.2
 mccabe==0.2.1
-mistune==0.8.4
+mistune==2.0.3
 mock==2.0.0
 multiprocess==0.70.11.1
 munch==2.5.0
