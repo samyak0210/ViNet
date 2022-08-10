@@ -82,7 +82,7 @@ multiprocess==0.70.11.1
 munch==2.5.0
 mutagen==1.45.1
 mxnet-cu90==1.6.0.post0
-nbconvert==5.4.0
+nbconvert==6.3.0
 nbformat==4.4.0
 networkx==2.4
 nltk==3.3
