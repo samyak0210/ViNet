@@ -1,5 +1,11 @@
 # ViNet: Pushing the limits of Visual Modality for Audio-Visual Saliency Prediction
 
+----
+> ## 🚀 New and Improved ViNet++ Models Available!
+>
+> We’ve released updated ViNet models with significantly improved speed and performance in our latest paper: [ViNet++: Minimalistic Video Saliency Prediction via Efficient Decoder & Spatio Temporal Action Cues](https://ieeexplore.ieee.org/abstract/document/10888852) with Code and pre-trained checkpoints available at [ViNet++ Github Repository](https://github.com/ViNet-Saliency/vinet_v2)
+----
+
 This repository contains Pytorch Implementation of ViNet and AViNet.
 
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/avinet-diving-deep-into-audio-visual-saliency/video-saliency-detection-on-dhf1k)](https://paperswithcode.com/sota/video-saliency-detection-on-dhf1k?p=avinet-diving-deep-into-audio-visual-saliency)
