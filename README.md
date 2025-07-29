@@ -3,7 +3,7 @@
 ----
 > ## 🚀 New and Improved ViNet++ Models Available!
 >
-> We’ve released updated ViNet models with significantly improved speed and performance in our latest paper: [ViNet++: Minimalistic Video Saliency Prediction via Efficient Decoder & Spatio Temporal Action Cues](https://ieeexplore.ieee.org/abstract/document/10888852) with Code and pre-trained checkpoints available at [ViNet++ Github Repository](https://github.com/ViNet-Saliency/vinet_v2)
+> We’ve released updated ViNet models with significantly improved speed and performance in our latest paper: [ViNet++: Minimalistic Video Saliency Prediction via Efficient Decoder & Spatio Temporal Action Cues](https://ieeexplore.ieee.org/abstract/document/10888852) with code and pre-trained checkpoints available at [ViNet++ GitHub Repository](https://github.com/ViNet-Saliency/vinet_v2)
 ----
 
 This repository contains Pytorch Implementation of ViNet and AViNet.
